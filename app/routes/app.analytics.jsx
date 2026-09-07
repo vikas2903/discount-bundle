@@ -1,4 +1,5 @@
-import { useLoaderData, useRouteError } from "react-router";
+import { isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
   getDiscountAnalytics,
@@ -38,6 +39,7 @@ export const loader = async ({ request }) => {
       ].map(({ message }) => message).join(" | ") || null,
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[analytics] Dashboard loader failed", error);
 
     return {
@@ -232,6 +234,7 @@ async function safelyLoadDashboardData(loadData, fallbackMessage) {
   try {
     return await loadData();
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[analytics] Unable to load dashboard data", error);
 
     return {
@@ -241,8 +244,12 @@ async function safelyLoadDashboardData(loadData, fallbackMessage) {
   }
 }
 
+export const headers = (headersArgs) => boundary.headers(headersArgs);
+
 export function ErrorBoundary() {
   const error = useRouteError();
+
+  if (isRouteErrorResponse(error)) return boundary.error(error);
 
   console.error("[analytics] Dashboard render failed", error);
 

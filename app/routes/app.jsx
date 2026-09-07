@@ -17,6 +17,7 @@ export const loader = async ({ request }) => {
   try {
     subscription = await checkSubscription(billing);
   } catch (error) {
+    if (error instanceof Response) throw error;
     // Navigation must still work if a newly installed store's billing lookup
     // briefly fails while its session is being created/refreshed.
     console.error("[billing] Unable to load the current subscription", error);
