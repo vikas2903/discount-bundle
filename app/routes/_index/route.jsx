@@ -1,10 +1,8 @@
-import { boundary } from "@shopify/shopify-app-react-router/server";
-import { useRouteError } from "react-router";
-import { authenticate } from "../../shopify.server";
+import { redirect } from "react-router";
 import { DASHBOARD_HOME_PATH } from "../../utils/billing.server";
 
-// Shopify opens the app at its root URL. Authenticate that launch and hand it
-// directly to the dashboard.
+// Forward the launch to the protected app layout, which initializes App Bridge
+// and handles authentication. The root route does not access merchant data.
 export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const isShopifyLaunch =
@@ -22,16 +20,8 @@ export const loader = async ({ request }) => {
     });
   }
 
-  const { redirect } = await authenticate.admin(request);
   return redirect(buildEmbeddedRedirectPath(DASHBOARD_HOME_PATH, request));
 };
-
-export const headers = (headersArgs) => boundary.headers(headersArgs);
-
-// Render Shopify's App Bridge recovery response instead of the root error page.
-export function ErrorBoundary() {
-  return boundary.error(useRouteError());
-}
 
 function buildEmbeddedRedirectPath(path, request) {
   const url = new URL(request.url);
