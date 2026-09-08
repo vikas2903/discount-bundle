@@ -14,6 +14,7 @@ export const loader = async ({ request }) => {
   try {
     subscription = await checkSubscription(billing);
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[billing] Unable to verify subscription after approval", error);
   }
 

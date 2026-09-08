@@ -20,6 +20,7 @@ export const loader = async ({ request }) => {
       return redirect(DASHBOARD_HOME_PATH);
     }
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[billing] Unable to check subscription before billing request", error);
     const message = "Shopify could not refresh your billing session. Please reload the app from Shopify Admin and try again.";
     return redirect(getBillingPathWithShop(request, session, message));

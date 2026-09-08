@@ -1,3 +1,4 @@
+import { buildEmbeddedHref } from "../utils/embedded-navigation.js";
 import { useLoaderData, useLocation } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
@@ -35,6 +36,7 @@ export const loader = async ({ request }) => {
   try {
     subscription = await checkSubscription(billing);
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[billing] Unable to load subscription on billing page", error);
     billingError =
       "We could not refresh your billing session. Reload the app from Shopify Admin if this message stays visible.";
@@ -59,12 +61,7 @@ export default function BillingPage() {
   function startSubscription() {
     // Preserve Shopify's embedded host and shop query parameters. The target
     // route is loaded as a document, just like a conventional Subscribe link.
-    const startUrl = new URL("/app/billing/start", window.location.origin);
-    startUrl.search = window.location.search;
-    if (shop && !startUrl.searchParams.has("shop")) {
-      startUrl.searchParams.set("shop", shop);
-    }
-    window.location.assign(startUrl.toString());
+    window.location.assign(buildEmbeddedHref("/app/billing/start", window.location.search, shop));
   }
 
   return (

@@ -1,3 +1,5 @@
+import { getAppUrl } from "./app-url.server.js";
+
 export const MONTHLY_PLAN = "Discount Bundle Pro";
 
 export const SUBSCRIPTION_PLAN = {
@@ -37,7 +39,7 @@ export async function checkSubscription(billing) {
 
 function getBillingReturnUrl(session) {
   const appHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
-  const appUrl = getAppBaseUrl();
+  const appUrl = getAppUrl();
 
   // Returning to Admin (rather than directly to the Railway URL) makes Shopify
   // launch the embedded app with its shop/host/session-token context.
@@ -56,23 +58,6 @@ function getBillingReturnUrl(session) {
 
   // Fallback for environments where SHOPIFY_APP_HANDLE is not configured yet.
   return appUrl ? `${appUrl}${returnPath}` : undefined;
-}
-
-function getAppBaseUrl() {
-  const configuredUrl = process.env.SHOPIFY_APP_URL?.trim() || "";
-  const markdownMatch = configuredUrl.match(/^\[([^\]]+)]\([^)]*\)$/);
-  const appUrl = markdownMatch?.[1] || configuredUrl;
-
-  try {
-    const url = new URL(appUrl);
-    if (url.protocol !== "https:") return "";
-    url.pathname = "";
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return "";
-  }
 }
 
 export async function requestSubscription(billing, session) {
@@ -128,7 +113,7 @@ export function getBillingPathWithShop(request, session, message = "") {
   const requestUrl = new URL(request.url);
   const billingUrl = new URL("/app/billing", requestUrl.origin);
 
-  for (const key of ["shop", "host", "embedded", "hmac", "timestamp", "locale"]) {
+  for (const key of ["shop", "host", "embedded", "locale"]) {
     const value = requestUrl.searchParams.get(key);
 
     if (value) {

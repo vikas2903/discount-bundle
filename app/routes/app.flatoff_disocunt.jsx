@@ -76,6 +76,7 @@ export const loader = async ({ request }) => {
         responseJson.errors?.map(({ message }) => message).join(" | ") || null,
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     return {
       discounts: [],
       discountsError: toErrorMessage(error),
@@ -157,6 +158,7 @@ export const action = async ({ request }) => {
         nextStatus,
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return {
         ok: false,
         action: intent,
@@ -237,6 +239,7 @@ export const action = async ({ request }) => {
       config,
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     return {
       ok: false,
       action: intent,

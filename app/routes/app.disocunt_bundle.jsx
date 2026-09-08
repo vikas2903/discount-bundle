@@ -78,6 +78,7 @@ export const action = async ({ request }) => {
         action: intent,
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return {
         ok: false,
         action: intent,
@@ -110,6 +111,7 @@ export const action = async ({ request }) => {
         action: intent,
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return {
         ok: false,
         action: intent,

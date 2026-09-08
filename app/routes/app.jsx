@@ -1,3 +1,4 @@
+import { buildEmbeddedHref } from "../utils/embedded-navigation.js";
 /* global process */
 import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -61,18 +62,6 @@ export default function App() {
       <Outlet />
     </AppProvider>
   );
-}
-
-function buildEmbeddedHref(path, search, shop) {
-  const searchParams = new URLSearchParams(search);
-
-  if (shop && !searchParams.has("shop")) {
-    searchParams.set("shop", shop);
-  }
-
-  const query = searchParams.toString();
-
-  return query ? `${path}?${query}` : path;
 }
 
 // Shopify needs React Router to catch some thrown responses, so that their headers are included in the response.

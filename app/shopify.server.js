@@ -12,30 +12,19 @@ import {
   SUBSCRIPTION_PLAN,
 } from "./utils/billing.server";
 
-function getAppUrl() {
-  const configuredUrl = process.env.SHOPIFY_APP_URL?.trim() || "";
-  // Railway values must be a plain URL, but tolerate a Markdown URL copied
-  // from chat so the OAuth/session flow is not sent to an invalid location.
-  const markdownMatch = configuredUrl.match(/^\[([^\]]+)]\([^)]*\)$/);
-  const appUrl = markdownMatch?.[1] || configuredUrl;
+import { getAppUrl } from "./utils/app-url.server.js";
 
-  try {
-    const url = new URL(appUrl);
-    if (url.protocol !== "https:") return "";
-    url.pathname = "";
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return "";
+for (const key of ["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET"]) {
+  if (!process.env[key]?.trim()) {
+    throw new Error(`[Shopify config] ${key} is required. Use the credentials for the same app as the deployed Shopify configuration.`);
   }
 }
 
 const shopify = shopifyApp({
-  apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+  apiKey: process.env.SHOPIFY_API_KEY.trim(),
+  apiSecretKey: process.env.SHOPIFY_API_SECRET.trim(),
   apiVersion: ApiVersion.October25,
-  scopes: process.env.SCOPES?.split(","),
+  scopes: process.env.SCOPES?.split(",").map((scope) => scope.trim()).filter(Boolean),
   appUrl: getAppUrl(),
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),

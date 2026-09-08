@@ -16,6 +16,7 @@ export async function getShopCurrencyCode(admin) {
 
     return result.data?.shop?.currencyCode || "USD";
   } catch (error) {
+    if (error instanceof Response) throw error;
     console.error("[analytics] Unable to load shop currency", error);
 
     return "USD";
@@ -66,6 +67,7 @@ export async function getDiscountAnalytics(admin, discountIdentifiers = []) {
       );
       result = await response.json();
     } catch (error) {
+      if (error instanceof Response) throw error;
       console.error("[analytics] Unable to fetch order analytics", error);
 
       return {

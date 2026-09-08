@@ -81,6 +81,7 @@ export const action = async ({ request }) => {
       ].join(" | "),
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     return {
       ok: false,
       error: toErrorMessage(error),

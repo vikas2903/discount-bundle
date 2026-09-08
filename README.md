@@ -79,6 +79,8 @@ For more information on the Shopify Dev MCP please read [the documentation](http
 
 ## Deployment
 
+See [the Railway auth deployment guide](docs/railway-auth.md) for the exact production settings and verification steps.
+
 ### Railway production checklist
 
 Before making the app live, deploy a running Railway service and use its exact

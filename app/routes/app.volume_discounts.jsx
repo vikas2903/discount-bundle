@@ -72,6 +72,7 @@ export const action = async ({ request }) => {
         action: intent,
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return createActionError(intent, toErrorMessage(error));
     }
   }
@@ -92,6 +93,7 @@ export const action = async ({ request }) => {
         action: intent,
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return createActionError(intent, toErrorMessage(error));
     }
   }
@@ -178,6 +180,7 @@ export const action = async ({ request }) => {
       config,
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     return createActionError(intent, toErrorMessage(error), config);
   }
 };

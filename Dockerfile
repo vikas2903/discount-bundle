@@ -8,8 +8,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json* ./
+COPY extensions/bundle-pack-3-for-999/package.json ./extensions/bundle-pack-3-for-999/package.json
 
-RUN npm ci && npm cache clean --force
+RUN npm ci --include=dev && npm cache clean --force
 
 COPY . .
 

@@ -83,6 +83,7 @@ export const action = async ({ request, params }) => {
         ].join(" | "),
       };
     } catch (error) {
+      if (error instanceof Response) throw error;
       return {
         ok: false,
         error: toErrorMessage(error),
@@ -133,6 +134,7 @@ export const action = async ({ request, params }) => {
       ].join(" | "),
     };
   } catch (error) {
+    if (error instanceof Response) throw error;
     return {
       ok: false,
       error: toErrorMessage(error),
