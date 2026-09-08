@@ -7,6 +7,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { authLogger } from "./utils/auth-logger.server.js";
 import {
   MONTHLY_PLAN,
   SUBSCRIPTION_PLAN,
@@ -21,6 +22,7 @@ for (const key of ["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET"]) {
 }
 
 const shopify = shopifyApp({
+  logger: authLogger,
   apiKey: process.env.SHOPIFY_API_KEY.trim(),
   apiSecretKey: process.env.SHOPIFY_API_SECRET.trim(),
   apiVersion: ApiVersion.October25,

@@ -3,6 +3,22 @@ import assert from "node:assert/strict";
 import { buildEmbeddedHref } from "../app/utils/embedded-navigation.js";
 import { getAppUrl } from "../app/utils/app-url.server.js";
 import { getDiscountAnalytics, getShopCurrencyCode } from "../app/services/analytics.server.js";
+import { authDiagnostic } from "../app/utils/auth-logger.server.js";
+
+test("auth diagnostics distinguish credential failures without exposing tokens", () => {
+  const secret = "sensitive-token-must-not-be-logged";
+  for (const [reason, expected] of [
+    ["signature verification failed", /signature mismatch/],
+    ["Session token had invalid API key", /audience mismatch/],
+    ['"exp" claim timestamp check failed', /expired/],
+    ['"nbf" claim timestamp check failed', /not valid yet/],
+  ]) {
+    const result = authDiagnostic(`Failed to validate session token: '${secret}': ${reason}`);
+    assert.match(result, expected);
+    assert.equal(result.includes(secret), false);
+  }
+  assert.equal(authDiagnostic(`Attempting to authenticate session token ${secret}`), null);
+});
 
 test("navigation retains embedding context without replaying launch credentials", () => {
   const href = buildEmbeddedHref("/app/analytics", "?host=admin&embedded=1&id_token=expired&hmac=signature&timestamp=123&billing_error=old", "live.myshopify.com");
