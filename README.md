@@ -184,6 +184,8 @@ This only applies if your app is embedded, which it will be by default.
 
 ### Webhooks: shop-specific webhook subscriptions aren't updated
 
+For this app's webhook fixes, automated tests, signed test deliveries, and Railway deployment steps, see [Webhook troubleshooting and testing](docs/webhooks.md).
+
 If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.
 
 Instead of using the `afterAuth` hook declare app-specific webhooks in the `shopify.app.toml` file. This approach is easier since Shopify will automatically sync changes every time you run `deploy` (e.g: `npm run deploy`). Please read these guides to understand more:

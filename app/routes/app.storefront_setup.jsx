@@ -72,7 +72,7 @@ export default function StorefrontSetupPage() {
 
         <section style={quickStartStyle}>
           <SetupStep number="1" title="Choose a theme" detail="Start with a preview or development theme if possible. You can test safely before changing your live store." />
-          <SetupStep number="2" title="Pick your offer type" detail="Use Bundle templates for a mix-and-match bundle page. Use Quantity offers for a buy-more-save-more product page." />
+          <SetupStep number="2" title="Pick your offer type" detail="Use the unified bundle page for fixed price, buy-X-get-Y-free, and percentage offers. Use Quantity offers for a product page." />
           <SetupStep number="3" title="Save and test" detail="In Shopify’s editor, add the block, choose its settings, click Save, and test the offer before publishing." />
         </section>
 
@@ -87,8 +87,7 @@ export default function StorefrontSetupPage() {
         <section style={sectionStyle}>
           <div><div style={eyebrowStyle}>Step 2</div><h3 style={titleStyle}>Choose what you want to show shoppers</h3><p style={copyStyle}>Use the buttons above to open Shopify’s theme editor. There, add the offer block, choose your products and colors, then click Save.</p></div>
           <div style={templateGridStyle}>
-            <TemplateCard name="Bundle template 1" type="For a bundle page" description="Let shoppers choose several products from one collection to make a bundle." steps={["Create a Page template.", "Add Bundle template 1 and choose the collection.", "Create a Shopify Page and select this template."]} />
-            <TemplateCard name="Bundle template 2" type="For a bundle page" description="A different look for the same type of mix-and-match bundle offer." steps={["Create a Page template.", "Add Bundle template 2 and choose the collection.", "Create a Shopify Page and select this template."]} />
+            <TemplateCard name="Unified bundle page" type="For a bundle page" description="Let shoppers choose products from one collection and automatically qualify for fixed price, free-item, or percentage offers." steps={["Create a Page template.", "Add the unified bundle page and choose the collection.", "Configure the enabled offer tiers and save."]} />
             <TemplateCard name="Quantity offers" type="For a product page" description="Show quantity savings, such as buy 2 and save more, on a product page." steps={["Create a Product template.", "Add Quantity offers to Product information.", "Assign the template to the products you want."]} />
           </div>
         </section>
@@ -115,12 +114,11 @@ function ThemeCard({ theme, shop, apiKey }) {
   const status = isLive ? "Live theme" : theme.role === "DEVELOPMENT" ? "Development preview" : "Preview theme";
   const editorBase = `https://${shop}/admin/themes/${theme.numericId}/editor`;
   const pageUrl = `${editorBase}?template=page&addAppBlockId=${apiKey}/bundle&target=newAppsSection`;
-  const bundleTwoUrl = `${editorBase}?template=page&addAppBlockId=${apiKey}/bundle1&target=newAppsSection`;
   const productUrl = `${editorBase}?template=product&addAppBlockId=${apiKey}/quantity_offers&target=mainSection`;
   return <article style={{ ...themeCardStyle, borderColor: isLive ? "#059669" : "#dbe4ea" }}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "start" }}><strong>{theme.name}</strong><span style={{ ...statusStyle, background: isLive ? "#d1fae5" : "#eff6ff", color: isLive ? "#047857" : "#1d4ed8" }}>{status}</span></div>
     <p style={copyStyle}>{isLive ? "This theme is live, so any saved changes can be visible to shoppers." : "This theme is not live yet, so it is a safe place to test."}</p>
-    <div style={buttonRowStyle}><a href={pageUrl} target="_top" style={buttonStyle}>Set up a bundle page</a><a href={bundleTwoUrl} target="_top" style={secondaryButtonStyle}>Set up bundle page (style 2)</a><a href={productUrl} target="_top" style={secondaryButtonStyle}>Set up quantity offers</a></div>
+    <div style={buttonRowStyle}><a href={pageUrl} target="_top" style={buttonStyle}>Set up unified bundle page</a><a href={productUrl} target="_top" style={secondaryButtonStyle}>Set up quantity offers</a></div>
     <p style={editorHintStyle}>Each button opens Shopify’s theme editor. Add the block, select the settings you want, and click Save.</p>
   </article>;
 }

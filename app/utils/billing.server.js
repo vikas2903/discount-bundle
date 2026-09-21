@@ -1,6 +1,8 @@
 import { getAppUrl } from "./app-url.server.js";
 
-export const MONTHLY_PLAN = "Discount Bundle Pro";
+// Keep the Billing API subscription name aligned with the Partner Dashboard's
+// public Pro plan handle.
+export const MONTHLY_PLAN = "pro-plan";
 
 export const SUBSCRIPTION_PLAN = {
   name: MONTHLY_PLAN,

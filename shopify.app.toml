@@ -1,12 +1,12 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "6768c8ee8bcc15436a4881b9250a8860"
-name = "Discount Bundle App" 
+name = "VsApps Bundles & Volume Deals" 
 application_url = "https://discount-bundle-production.up.railway.app"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = false
+automatically_update_urls_on_dev = true
 
 [webhooks]
 api_version = "2026-07"

@@ -4,7 +4,7 @@ export const DEFAULT_FUNCTION_HANDLE = "bundle-pack-3-for-999";
 export const DEFAULT_BUNDLE_CONFIG = {
   discountType: "bundle",
   bundleTiers: [
-    { quantity: 2, discountType: "fixed_price", value: 799 },
+    { quantity: 2, freeQuantity: 0, discountType: "fixed_price", value: 799 },
   ],
   selectedCollectionIds: [],
   message: "Your bundle saving has been applied",
@@ -64,9 +64,11 @@ export function buildBundleConfig(formData) {
   const bundleTierQuantities = formData.getAll("bundleTierQuantity");
   const bundleTierTypes = formData.getAll("bundleTierDiscountType");
   const bundleTierValues = formData.getAll("bundleTierValue");
+  const bundleTierFreeQuantities = formData.getAll("bundleTierFreeQuantity");
   const bundleTiers = normalizeBundleTiers(
     bundleTierQuantities.map((quantity, index) => ({
       quantity,
+      freeQuantity: bundleTierFreeQuantities[index],
       discountType: bundleTierTypes[index],
       value: bundleTierValues[index],
     })),
@@ -99,7 +101,11 @@ export function validateBundleConfig(config, rawTierCount = 0) {
     errors.push("Bundle quantity must be 2 or more.");
   }
 
-  if (config.bundleTiers.some((tier) => tier.value <= 0)) {
+  if (config.bundleTiers.some((tier) => tier.discountType === "free" && tier.freeQuantity < 1)) {
+    errors.push("Buy X get Y free offers must include at least one free item.");
+  }
+
+  if (config.bundleTiers.some((tier) => tier.discountType !== "free" && tier.value <= 0)) {
     errors.push("The saving amount must be greater than 0.");
   }
 
@@ -200,11 +206,14 @@ function normalizeBundleTiers(value, fallback) {
   const tiers = (Array.isArray(value) ? value : [])
     .map((tier) => ({
       quantity: toPositiveInteger(tier?.quantity, 0),
-      discountType: tier?.discountType === "percentage" ? "percentage" : "fixed_price",
+      freeQuantity: toPositiveInteger(tier?.freeQuantity, 0),
+      discountType: ["percentage", "free"].includes(tier?.discountType)
+        ? tier.discountType
+        : "fixed_price",
       // Existing offers stored `price`; retain them as fixed-price offers.
       value: toPositiveNumber(tier?.value ?? tier?.price, 0),
     }))
-    .filter((tier) => tier.quantity >= 2 && tier.value > 0)
+    .filter((tier) => tier.quantity >= 2 && (tier.discountType === "free" ? tier.freeQuantity > 0 : tier.value > 0))
     .sort((left, right) => left.quantity - right.quantity)
     .filter((tier) => {
       if (seenQuantities.has(tier.quantity)) {

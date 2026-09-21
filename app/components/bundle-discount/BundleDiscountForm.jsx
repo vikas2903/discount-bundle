@@ -58,7 +58,8 @@ export function BundleDiscountForm({
   const sortedPreviewTiers = [...bundleTiers]
     .map((tier) => ({
       quantity: Number(tier.quantity) || 0,
-      discountType: tier.discountType === "percentage" ? "percentage" : "fixed_price",
+      discountType: ["percentage", "free"].includes(tier.discountType) ? tier.discountType : "fixed_price",
+      freeQuantity: Number(tier.freeQuantity) || 0,
       value: Number(tier.value ?? tier.price) || 0,
     }))
     .filter((tier) => tier.quantity > 0 || tier.value > 0)
@@ -138,7 +139,7 @@ export function BundleDiscountForm({
               <SectionIntro
                 step="2"
                 title="Choose how shoppers save"
-                description="For each quantity, choose either a fixed total bundle price or a percentage off. Use the examples to make the offer easy to understand."
+                description="For each quantity, choose a fixed price, a percentage discount, or a buy-X-get-Y-free offer."
               />
               <s-button type="button" variant="secondary" onClick={addTier}>
                 Add another bundle option
@@ -167,6 +168,11 @@ export function BundleDiscountForm({
                     />
                     <input
                       type="hidden"
+                      name="bundleTierFreeQuantity"
+                      value={tier.freeQuantity || 0}
+                    />
+                    <input
+                      type="hidden"
                       name="bundleTierValue"
                       value={tier.value}
                     />
@@ -187,11 +193,14 @@ export function BundleDiscountForm({
                       >
                         <option value="fixed_price">Set a fixed total bundle price</option>
                         <option value="percentage">Give a percentage off</option>
+                        <option value="free">Give items free</option>
                       </select>
                     </label>
                     <s-text-field
                       label={tier.discountType === "percentage"
                         ? `Option ${index + 1}: percentage off`
+                        : tier.discountType === "free"
+                          ? `Option ${index + 1}: free items`
                         : `Option ${index + 1}: total bundle price`}
                       type="number"
                       min="0"
@@ -201,9 +210,22 @@ export function BundleDiscountForm({
                         updateTier(index, "value", event.currentTarget.value)
                       }
                     />
+                    {tier.discountType === "free" ? (
+                      <s-text-field
+                        label={`Option ${index + 1}: free quantity`}
+                        type="number"
+                        min="1"
+                        value={String(tier.freeQuantity || 1)}
+                        onInput={(event) =>
+                          updateTier(index, "freeQuantity", event.currentTarget.value)
+                        }
+                      />
+                    ) : null}
                     <p style={tierHintStyle}>
                       {tier.discountType === "percentage"
                         ? `Example: Buy ${tier.quantity || "this many"} items and get ${tier.value || "0"}% off.`
+                        : tier.discountType === "free"
+                          ? `Example: Buy ${tier.quantity || "this many"}, get ${tier.freeQuantity || "1"} free.`
                         : `Example: Buy ${tier.quantity || "this many"} items and pay ${tier.value || "your price"} in total.`}
                     </p>
                     <div style={{ display: "flex", justifyContent: "flex-start" }}>
@@ -347,6 +369,8 @@ export function BundleDiscountForm({
                   <s-paragraph key={`${tier.quantity}-${tier.discountType}-${tier.value}`}>
                     {tier.discountType === "percentage"
                       ? `Buy ${tier.quantity} and get ${tier.value}% off`
+                      : tier.discountType === "free"
+                        ? `Buy ${tier.quantity}, get ${tier.freeQuantity} free`
                       : `Buy ${tier.quantity} for ${tier.value}`}
                   </s-paragraph>
                 ))}
@@ -514,6 +538,7 @@ function createEmptyTier(currentTiers) {
 
   return {
     quantity: highestQuantity + 1,
+    freeQuantity: 0,
     discountType: "fixed_price",
     value: "",
   };
@@ -522,7 +547,8 @@ function createEmptyTier(currentTiers) {
 function toFormTier(tier) {
   return {
     quantity: tier?.quantity ?? 2,
-    discountType: tier?.discountType === "percentage" ? "percentage" : "fixed_price",
+    freeQuantity: tier?.freeQuantity ?? 0,
+    discountType: ["percentage", "free"].includes(tier?.discountType) ? tier.discountType : "fixed_price",
     value: tier?.value ?? tier?.price ?? "",
   };
 }

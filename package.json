@@ -2,6 +2,8 @@
   "name": "discount-bundle-app",
   "private": true,
   "scripts": {
+    "test:webhooks": "node --test tests/webhooks.test.mjs",
+    "test:webhooks:integration": "npm run build && node --test tests/webhooks.integration.test.mjs",
     "build": "react-router build",
     "predev": "npm run setup",
     "dev": "shopify app dev",

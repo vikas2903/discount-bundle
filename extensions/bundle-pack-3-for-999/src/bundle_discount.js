@@ -5,11 +5,12 @@ export function runBundleDiscount(input, configValue) {
   const bundleRules = [...config.bundleTiers]
     .map((tier) => ({
       quantity: tier.quantity,
+      freeQuantity: tier.freeQuantity || 0,
       discountType: tier.discountType,
       value: tier.value,
     }))
-    .filter((rule) => rule.quantity >= 2 && rule.value > 0)
-    .sort((left, right) => right.quantity - left.quantity);
+    .filter((rule) => rule.quantity >= 2 && (rule.discountType === 'free' ? rule.freeQuantity > 0 : rule.value > 0))
+    .sort((left, right) => (right.quantity + right.freeQuantity) - (left.quantity + left.freeQuantity));
 
   if (!bundleRules.length) {
     return {operations: []};
@@ -53,12 +54,13 @@ export function runBundleDiscount(input, configValue) {
     let appliedRule = false;
 
     for (const rule of bundleRules) {
+      const requiredUnits = rule.quantity + rule.freeQuantity;
       const bundleUnits = eligibleUnits.slice(
         unitIndex,
-        unitIndex + rule.quantity,
+        unitIndex + requiredUnits,
       );
 
-      if (bundleUnits.length !== rule.quantity) {
+      if (bundleUnits.length !== requiredUnits) {
         continue;
       }
 
@@ -66,7 +68,9 @@ export function runBundleDiscount(input, configValue) {
         (total, unit) => total + unit.price,
         0,
       );
-      const bundleDiscount = rule.discountType === 'percentage'
+      const bundleDiscount = rule.discountType === 'free'
+        ? bundleUnits.slice(-rule.freeQuantity).reduce((total, unit) => total + unit.price, 0)
+        : rule.discountType === 'percentage'
         ? bundleSubtotal * (rule.value / 100)
         : bundleSubtotal - rule.value;
 
@@ -77,7 +81,7 @@ export function runBundleDiscount(input, configValue) {
           discountedCartLineIds.add(unit.cartLineId);
         }
 
-        unitIndex += rule.quantity;
+        unitIndex += requiredUnits;
         appliedRule = true;
         break;
       }
@@ -176,10 +180,11 @@ function normalizeBundleTiers(value, fallback) {
   const tiers = (Array.isArray(value) ? value : [])
     .map((tier) => ({
       quantity: toPositiveInteger(tier?.quantity, 0),
-      discountType: tier?.discountType === 'percentage' ? 'percentage' : 'fixed_price',
+      freeQuantity: toPositiveInteger(tier?.freeQuantity, 0),
+      discountType: ['percentage', 'free'].includes(tier?.discountType) ? tier.discountType : 'fixed_price',
       value: toPositiveNumber(tier?.value ?? tier?.price, 0),
     }))
-    .filter((tier) => tier.quantity >= 2 && tier.value > 0 && (tier.discountType !== 'percentage' || tier.value <= 100))
+    .filter((tier) => tier.quantity >= 2 && (tier.discountType === 'free' ? tier.freeQuantity > 0 : tier.value > 0) && (tier.discountType !== 'percentage' || tier.value <= 100))
     .sort((left, right) => left.quantity - right.quantity)
     .filter((tier) => {
       if (seenQuantities.has(tier.quantity)) {
