@@ -1,5 +1,5 @@
 import { buildEmbeddedHref } from "../utils/embedded-navigation.js";
-import { useLoaderData, useLocation } from "react-router";
+import { useFetcher, useLoaderData, useLocation } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   BILLING_DISABLED,
@@ -52,16 +52,71 @@ export const loader = async ({ request }) => {
   };
 };
 
+// A Free plan does not need a Shopify subscription. Cancelling the active Pro
+// subscription is therefore the self-service downgrade operation.
+export const action = async ({ request }) => {
+  const { billing } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") || "");
+
+  if (intent !== "downgrade-to-free") {
+    return { ok: false, message: "Unsupported billing action." };
+  }
+
+  if (BILLING_DISABLED) {
+    return {
+      ok: false,
+      message: "Billing is bypassed in this environment, so there is no subscription to cancel.",
+    };
+  }
+
+  try {
+    const subscription = await checkSubscription(billing);
+
+    if (!subscription?.id) {
+      return { ok: true, message: "Your store is already on the Free plan." };
+    }
+
+    await billing.cancel({
+      subscriptionId: subscription.id,
+      isTest: BILLING_TEST_MODE,
+      // End Pro immediately and ask Shopify to create any applicable prorated credit.
+      prorate: true,
+    });
+
+    return {
+      ok: true,
+      message: "Pro has been cancelled and your store is now on the Free plan. Shopify will show any prorated credit in your charge history.",
+    };
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    console.error("[billing] Unable to downgrade subscription", error);
+    return {
+      ok: false,
+      message: getBillingErrorMessage(error, "Shopify could not cancel the Pro subscription. Please try again."),
+    };
+  }
+};
+
 export default function BillingPage() {
   const { plan, subscription, shop, billingError: loaderBillingError, billingDisabled, billingTestMode } = useLoaderData();
   const { search } = useLocation();
+  const downgradeFetcher = useFetcher();
   const billingError = new URLSearchParams(search).get("billing_error") || loaderBillingError || "";
   const hasSubscription = Boolean(subscription);
+  const isDowngrading = downgradeFetcher.state !== "idle";
+  const downgradeResult = downgradeFetcher.data;
 
   function startSubscription() {
     // Preserve Shopify's embedded host and shop query parameters. The target
     // route is loaded as a document, just like a conventional Subscribe link.
     window.location.assign(buildEmbeddedHref("/app/billing/start", window.location.search, shop));
+  }
+
+  function confirmDowngrade(event) {
+    if (!window.confirm("Downgrade to Free? Pro features will stop immediately. Shopify will calculate a prorated credit for any unused paid time.")) {
+      event.preventDefault();
+    }
   }
 
   return (
@@ -109,6 +164,18 @@ export default function BillingPage() {
           </s-banner>
         ) : null}
 
+        {downgradeResult?.ok ? (
+          <s-banner tone="success">
+            <s-paragraph>{downgradeResult.message}</s-paragraph>
+          </s-banner>
+        ) : null}
+
+        {downgradeResult && !downgradeResult.ok ? (
+          <s-banner tone="critical">
+            <s-paragraph>{downgradeResult.message}</s-paragraph>
+          </s-banner>
+        ) : null}
+
         <div
           style={{
             display: "grid",
@@ -137,6 +204,14 @@ export default function BillingPage() {
             </div>
             <ul style={featureListStyle}>{FREE_FEATURES.map((feature) => <li key={feature}>{feature}</li>)}</ul>
             {!hasSubscription ? <div style={noteBoxStyle}>Your store is currently on Free.</div> : null}
+            {hasSubscription && !billingDisabled ? (
+              <downgradeFetcher.Form method="post" onSubmit={confirmDowngrade}>
+                <input type="hidden" name="intent" value="downgrade-to-free" />
+                <s-button type="submit" variant="secondary" loading={isDowngrading}>
+                  Downgrade to Free
+                </s-button>
+              </downgradeFetcher.Form>
+            ) : null}
           </section>
 
           <section style={buildPlanCardStyle("#ffffff", "#111111")}>
@@ -172,7 +247,7 @@ export default function BillingPage() {
 
             {hasSubscription ? (
               <div style={noteBoxStyle}>
-                Pro is active for this store. Manage or cancel this subscription in Shopify Admin → Settings → Billing.
+                Pro is active for this store. Use the Free-plan downgrade option to cancel it without leaving the app.
               </div>
             ) : (
               <s-button type="button" variant="primary" onClick={startSubscription}>
@@ -181,7 +256,7 @@ export default function BillingPage() {
             )}
 
             <div style={noteBoxStyle}>
-              Cancel anytime in Shopify Admin → Settings → Billing. Cancelling returns future use to the Free plan when the paid period ends.
+              Downgrading to Free cancels Pro immediately. Shopify calculates any applicable prorated credit and records it in the app charge history.
             </div>
 
             {billingTestMode ? (
@@ -275,3 +350,13 @@ const footnoteStyle = {
   fontSize: "0.78rem",
   color: "#6b7280",
 };
+
+function getBillingErrorMessage(error, fallback) {
+  const details = Array.isArray(error?.errorData)
+    ? error.errorData
+        .map((entry) => (typeof entry?.message === "string" ? entry.message : ""))
+        .filter(Boolean)
+    : [];
+
+  return details.join(" ") || fallback;
+}
