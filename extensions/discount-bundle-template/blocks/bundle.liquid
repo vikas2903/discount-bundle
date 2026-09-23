@@ -235,6 +235,7 @@
 .vs-selected-label { display:block; font-size:9px; color:#00a881; text-transform:uppercase; margin-bottom:2px; }
 .vs-selected-title { display:block; font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .vs-selected-variant { display:block; color:#666; font-size:10px; }
+.vs-selected-price { display:block; margin-top:2px; color:#313131; font-size:10px; font-weight:600; }
 .vs-selected-item button { position:absolute; top:-5px; right:-5px; display:grid; place-items:center; width:18px; height:18px; border:0; border-radius:50%; background:#ff414c; box-shadow:0 1px 4px #0002; color:#fff; padding:0; font-size:13px; }
 .vs-pack-progress { min-height:57px; display:flex; align-items:center; gap:14px; padding:10px 15px; background:linear-gradient(90deg,#e7f6ef 0%,#f2faf6 55%,#fff 100%); border-bottom:1px solid #ededed; }
 .vs-pack-steps { display:flex; align-items:center; list-style:none; margin:0; padding:0; }
@@ -344,12 +345,20 @@
       this.on(section, 'click', event => this.handleClick(event));
       this.on(this.modal.querySelector('.vs-modal-overlay'), 'click', () => this.closeModal());
       this.on(document, 'keydown', event => this.handleKeydown(event));
-      this.on(document, 'cart:updated', () => { if (!this.busy) this.reconcileCart(); });
       this.checkouts.forEach(checkout => this.on(checkout, 'click', event => {
-        if (!this.canCheckout()) { event.preventDefault(); event.stopImmediatePropagation(); }
+        if (this.handoffCheckout) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (this.canCheckout()) this.checkoutBundle(checkout);
       }, {capture:true}));
       this.checkoutObserver = new MutationObserver(() => this.updateCheckout());
       this.checkouts.forEach(checkout => this.checkoutObserver.observe(checkout, {childList:true, subtree:true}));
+      if ('IntersectionObserver' in window) {
+        this.observer = new IntersectionObserver(entries => {
+          if (entries.some(entry => entry.isIntersecting) && !this.loadFailed) this.loadMore();
+        }, {rootMargin:'300px'});
+        this.observer.observe(this.loadButton);
+      }
       this.updateUI();
       this.restoreSelection();
     }
@@ -616,10 +625,6 @@
       if (!button || button.disabled) return;
       const card = button.closest('.vs-card');
       const entry = card ? this.products.get(card.dataset.productId) : null;
-      if (button.hasAttribute('data-native-checkout')) {
-        if (this.canCheckout()) window.location.assign(this.root + 'checkout');
-        return;
-      }
       if (button.hasAttribute('data-close')) return this.closeModal();
       if (button.hasAttribute('data-pack-toggle')) { this.packExpanded = !this.packExpanded; this.updatePackDisclosure(); return; }
       if (button.hasAttribute('data-load-more')) return this.loadMore();
@@ -822,16 +827,20 @@
       if (!response.ok || data.status >= 400) throw new Error(data.description || data.message || 'Unable to update your pack. Please try again.');
       return data;
     }
-    async toggleProduct(entry, variant, fromModal = false) {
+    toggleProduct(entry, variant, fromModal = false) {
       if (this.busy || !entry || !variant?.available) return;
       const existing = this.selected.find(item => item.variantId === String(variant.id));
-      if (existing) return;
+      if (existing) {
+        this.removeProduct(String(variant.id));
+        if (fromModal) this.closeModal();
+        return;
+      }
       if (this.selected.length >= this.maxProducts) return;
-      // Update the temporary bundle immediately; the Shopify cart request confirms it in the background.
-      const pendingItem = {
+      // Keep selections in session storage until checkout. This prevents cart drawers
+      // (including GoKwik) from opening once for every product a customer picks.
+      const selectedItem = {
         productId:String(entry.product.id),
         variantId:String(variant.id),
-        key:null,
         price:variant.price / 100,
         comparePrice:Math.max(variant.price, variant.compare_at_price || 0) / 100,
         label:this.label(entry.product),
@@ -839,49 +848,27 @@
         title:entry.product.title,
         image:imageSource(variant.featured_image) || imageSource(entry.product.images?.[0])
       };
-      this.selected.push(pendingItem);
-      this.busy = true;
-      this.updateUI();
-      this.showMessage('');
-      try {
-        const item = await this.requestCart('cart/add.js', {id:String(variant.id), quantity:1});
-        pendingItem.key = item.key;
-        // Keep the card on the size chosen in quick view so its added state matches.
-        const card = [...this.grid.querySelectorAll('.vs-card')].find(card => card.dataset.productId === String(entry.product.id));
-        if (card) {
-          card.dataset.variantId = String(variant.id);
-          card.dataset.cardSelections = JSON.stringify(Object.fromEntries((variant.options || []).map((value, index) => [index, value])));
-          this.updateCard(card, null, true);
-        }
-        this.saveSelection();
-        this.showMessage(`${entry.product.title} added to your pack.`);
-        document.dispatchEvent(new CustomEvent('cart:updated'));
-        if (fromModal) this.closeModal();
-      } catch (error) {
-        this.selected = this.selected.filter(item => item !== pendingItem);
-        this.showMessage(error.message, true);
-      } finally {
-        this.busy = false;
-        if (!this.destroyed) this.updateUI();
+      this.selected.push(selectedItem);
+      // Keep the card on the option selected in quick view so its state stays in sync.
+      const card = [...this.grid.querySelectorAll('.vs-card')].find(card => card.dataset.productId === String(entry.product.id));
+      if (card) {
+        card.dataset.variantId = String(variant.id);
+        card.dataset.cardSelections = JSON.stringify(Object.fromEntries((variant.options || []).map((value, index) => [index, value])));
+        this.updateCard(card, null, true);
       }
+      this.saveSelection();
+      this.showMessage(`${entry.product.title} added to your pack.`);
+      this.updateUI();
+      if (fromModal) this.closeModal();
     }
-    async removeProduct(variantId) {
+    removeProduct(variantId) {
       if (this.busy) return;
       const item = this.selected.find(product => product.variantId === variantId);
       if (!item) return;
-      this.busy = true;
+      this.selected = this.selected.filter(product => product.variantId !== variantId);
+      this.saveSelection();
+      this.showMessage(`${item.title} removed from your pack.`);
       this.updateUI();
-      try {
-        const cart = await this.requestCart('cart.js');
-        const line = cart.items.find(line => line.key === item.key) || cart.items.find(line => String(line.variant_id) === item.variantId);
-        // Remove only the one unit added by this bundle, preserving existing cart items.
-        if (line) await this.requestCart('cart/change.js', {id:line.key, quantity:Math.max(0, line.quantity - 1)});
-        this.selected = this.selected.filter(product => product.variantId !== variantId);
-        this.saveSelection();
-        this.showMessage(`${item.title} removed from your pack.`);
-        document.dispatchEvent(new CustomEvent('cart:updated'));
-      } catch (error) { this.showMessage(error.message, true); }
-      finally { this.busy = false; if (!this.destroyed) this.updateUI(); }
     }
     showMessage(message, error = false) {
       this.section.querySelector('[data-status]').textContent = message;
@@ -906,21 +893,39 @@
               this.updateCard(card, null, true);
             }
           });
-          await this.reconcileCart();
+          this.updateUI();
         }
       } catch (_) { /* A new pack remains usable when storage is unavailable. */ }
     }
-    async reconcileCart() {
-      if (this.busy || this.syncing || !this.selected.length) return;
-      this.syncing = true;
+    async checkoutBundle(checkout) {
+      if (!this.canCheckout()) return;
+      this.busy = true;
+      this.updateUI();
+      this.showMessage('Adding your pack to cart…');
       try {
-        const cart = await this.requestCart('cart.js');
-        if (this.busy || this.destroyed) return;
-        this.selected = this.selected.filter(item => cart.items.some(line => String(line.variant_id) === item.variantId && line.quantity > 0));
-        this.saveSelection();
-        this.updateUI();
-      } catch (_) { /* Keep the current UI when a read fails. */ }
-      finally { this.syncing = false; }
+        await this.requestCart('cart/add.js', {items:this.selected.map(item => ({id:item.variantId, quantity:1}))});
+        try { sessionStorage.removeItem(this.storageKey); } catch (_) { /* Checkout can continue when storage is unavailable. */ }
+        document.dispatchEvent(new CustomEvent('cart:updated'));
+        if (checkout.hasAttribute('data-native-checkout')) return window.location.assign(this.root + 'checkout');
+        if (checkout.closest('.gokwik-checkout')) {
+          if (typeof window.onCheckoutClick === 'function') return window.onCheckoutClick(checkout.querySelector('button') || checkout);
+          return window.location.assign(this.root + 'checkout');
+        }
+        // Shiprocket attaches its own click handler to the rendered control. Let it
+        // run after the bundle has been added, without re-entering this listener.
+        const providerButton = checkout.matches('button, a, [role="button"]') ? checkout : checkout.querySelector('button, a, [role="button"]');
+        if (providerButton) {
+          this.handoffCheckout = true;
+          providerButton.click();
+          this.handoffCheckout = false;
+          return;
+        }
+        window.location.assign(this.root + 'checkout');
+      } catch (error) {
+        this.busy = false;
+        this.showMessage(error.message, true);
+        if (!this.destroyed) this.updateUI();
+      }
     }
     canCheckout() { return !this.busy && this.selected.length === this.offerProducts; }
     updateCheckout() {
@@ -948,7 +953,7 @@
       this.section.querySelector('[data-bottom-bar]').hidden = !count;
       this.section.querySelector('[data-selected-items]').innerHTML = this.selected.map(item => `<div class="vs-selected-item">
         <div class="vs-selected-photo">${item.image ? `<img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.title)}" width="45" height="46">` : ''}<span class="vs-item-quantity">1</span></div>
-        <div class="vs-selected-copy"><span class="vs-selected-label">${escapeHTML(item.label || '')}</span><strong class="vs-selected-title">${escapeHTML(item.title)}</strong><span class="vs-selected-variant">${escapeHTML(item.variantTitle || '')}</span></div>
+        <div class="vs-selected-copy"><span class="vs-selected-label">${escapeHTML(item.label || '')}</span><strong class="vs-selected-title">${escapeHTML(item.title)}</strong><span class="vs-selected-variant">${escapeHTML(item.variantTitle || '')}</span><span class="vs-selected-price">${this.money(item.price)}</span></div>
         <button type="button" data-remove="${escapeHTML(item.variantId)}" aria-label="Remove ${escapeHTML(item.title)} from pack" ${this.busy ? 'disabled' : ''}>×</button>
       </div>`).join('');
       this.section.querySelector('[data-pack-preview]').innerHTML = this.selected.slice(0,3).filter(item => item.image).map(item => `<img src="${escapeHTML(item.image)}" alt="" width="30" height="32">`).join('');
@@ -976,6 +981,7 @@
       this.closeModal();
       this.destroyed = true;
       this.events.abort();
+      this.observer?.disconnect();
       this.checkoutObserver?.disconnect();
       delete this.section.vsBundle;
     }
