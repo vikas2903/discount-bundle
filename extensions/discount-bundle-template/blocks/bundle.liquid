@@ -11,6 +11,7 @@
     assign bundle_free_quantity = block.settings.free_quantity | default: 1
   endif
   assign bundle_total_quantity = bundle_required_quantity | plus: bundle_free_quantity
+  assign gokwik_button_title = settings['buynow-titile'] | default: block.settings.gokwik_checkout_label | default: 'Place Order'
 -%}
 
 <section class="vs-bundle" id="vs-bundle-{{ block.id }}" data-section-id="{{ block.id }}" data-shopify-section-id="{{ section.id }}" style="--vs-image-bg: {{ block.settings.product_image_background | default: '#f3f3f3' | escape }};--vs-native-checkout-bg:{{ block.settings.native_checkout_background | default: '#1b1b1b' }};--vs-native-checkout-text:{{ block.settings.native_checkout_text_color | default: '#ffffff' }};">
@@ -23,6 +24,7 @@
       "discountType": {{ block.settings.discount_type | json }},
       "discountValue": {{ block.settings.discount_value | json }},
       "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
+      "customCheckoutCode": {{ block.settings.custom_checkout_code | json }},
       "productLabel": "",
       "offerLabel": "Rare Offer",
       "chartInSlider": {{ block.settings.size_chart_in_slider | json }},
@@ -83,20 +85,26 @@
         <div class="vs-total"><s data-original-total hidden></s><strong data-total></strong></div>
         <div class="vs-checkout-area">
           <div class="vs-checkout-buttons">
-            {%- if block.settings.enable_shopify_checkout != false -%}
-              <button type="button" class="vs-native-checkout" data-checkout data-native-checkout disabled>{{ block.settings.shopify_checkout_label | default: 'Checkout' }}</button>
-            {%- endif -%}
-            {%- if block.settings.enable_shiprocket_checkout -%}
-              <div class="shiprocket-headless vs-fastrr-btn" data-type="mini-cart" data-checkout aria-disabled="true"></div>
-            {%- endif -%}
-            {%- if block.settings.enable_gokwik_checkout -%}
-              <div class="gokwik-checkout" data-type="mini-cart" data-checkout aria-disabled="true">
-                <button type="button" class="button" id="gokwik-buy-now">
-                  <span class="btn-text"><span>{{ block.settings.gokwik_checkout_label | default: 'Place Order' }}</span><span>{{ block.settings.gokwik_checkout_note | default: 'Up to 10% off on Prepaid' }}</span></span>
+            {%- if block.settings.checkout_provider == 'shiprocket' -%}
+              <div class="shiprocket-headless vs-fastrr-btn" data-type="mini-cart" data-checkout></div>
+            {%- elsif block.settings.checkout_provider == 'gokwik' -%}
+              <div class="gokwik-checkout" data-type="mini-cart">
+                <button data-checkout type="button" class="button disabled" disabled id="gokwik-buy-now" {% if settings.hideFlow %}style="display:none !important;"{% endif %}>
+                  <div style="display:none" class="addloadr" id="btn-loader"><div class="cir-loader">Loading..</div></div>
+                  <span class="btn-text"><span>{{ gokwik_button_title }}</span></span>
                   <span class="pay-opt-icon"><img src="https://cdn.gokwik.co/v4/images/upi-icons.svg" alt=""><img src="https://cdn.gokwik.co/v4/images/right-arrow.svg" alt=""></span>
-                  <span class="addloadr" id="btn-loader" style="display:none"><span class="cir-loader">Loading..</span></span>
                 </button>
               </div>
+            {%- elsif block.settings.checkout_provider == 'custom' -%}
+              <div class="vs-custom-checkout" data-checkout aria-disabled="true">
+                {%- if block.settings.custom_checkout_button_html != blank -%}
+                  {{ block.settings.custom_checkout_button_html }}
+                {%- else -%}
+                  <button type="button" class="vs-custom-checkout-trigger">{{ block.settings.custom_checkout_label | default: 'Checkout' }}</button>
+                {%- endif -%}
+              </div>
+            {%- else -%}
+              <button type="button" class="vs-native-checkout" data-checkout data-native-checkout disabled>{{ block.settings.shopify_checkout_label | default: 'Checkout' }}</button>
             {%- endif -%}
           </div>
         </div>
@@ -263,11 +271,11 @@
 .vs-total s { display:block; color:#9c9c9c; font-size:10px; }
 .vs-checkout-area { flex:0 1 300px; min-width:180px; }
 .vs-checkout-buttons { display:grid; gap:8px; width:100%; }
-.vs-native-checkout, .vs-fastrr-btn button, .vs-fastrr-btn a, .vs-fastrr-btn [role="button"], .gokwik-checkout button { width:100%; min-height:48px; background:#1b1b1b; color:#fff; border:0; border-radius:6px; padding:10px 16px; text-decoration:none; }
+.vs-native-checkout, .vs-fastrr-btn button, .vs-fastrr-btn a, .vs-fastrr-btn [role="button"], .gokwik-checkout button, .vs-custom-checkout button, .vs-custom-checkout a, .vs-custom-checkout [role="button"] { width:100%; min-height:48px; background:#1b1b1b; color:#fff; border:0; border-radius:6px; padding:10px 16px; text-decoration:none; }
 .vs-native-checkout { background:var(--vs-native-checkout-bg); color:var(--vs-native-checkout-text); font-weight:700; }
 .vs-fastrr-btn:empty { min-height:48px; border-radius:6px; background:#f1f3f5; }
 .vs-fastrr-btn:empty::before { content:'Shiprocket checkout will load here'; display:grid; min-height:48px; place-items:center; color:#59636e; font-size:11px; }
-.vs-native-checkout:disabled, .vs-fastrr-btn[aria-disabled="true"], .gokwik-checkout[aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+.vs-native-checkout:disabled, .vs-fastrr-btn[aria-disabled="true"], .gokwik-checkout button:disabled, .vs-custom-checkout[aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
 .gokwik-checkout button { display:flex; align-items:center; gap:10px; text-align:left; }
 .gokwik-checkout .btn-text { display:grid; gap:2px; }
 .gokwik-checkout .btn-text span:last-child { font-size:9px; font-weight:400; opacity:.8; }
@@ -294,7 +302,7 @@
   .vs-pack-toggle strong { font-size:11px; }
   .vs-total strong { font-size:13px; }
   .vs-checkout-area { flex-basis:100%; width:100%; }
-  .vs-native-checkout, .vs-fastrr-btn button, .vs-fastrr-btn a, .vs-fastrr-btn [role="button"], .gokwik-checkout button { padding:12px 14px; font-size:11px; }
+  .vs-native-checkout, .vs-fastrr-btn button, .vs-fastrr-btn a, .vs-fastrr-btn [role="button"], .gokwik-checkout button, .vs-custom-checkout button, .vs-custom-checkout a, .vs-custom-checkout [role="button"] { padding:12px 14px; font-size:11px; }
   .vs-selected-item { width:236px; min-width:236px; }
 
 }
@@ -788,9 +796,11 @@
       const selected = this.selected.some(item => item.variantId === String(variant?.id));
       const sold = !variant?.available;
       const full = this.selected.length >= this.maxProducts && !selected;
-      button.disabled = this.busy || !optionsSelected || sold || full || selected;
+      // A selected variant remains actionable so the same card button can remove
+      // it from the temporary bundle.
+      button.disabled = this.busy || !optionsSelected || sold || full;
       button.classList.toggle('is-added', selected);
-      const text = !optionsSelected ? 'SELECT OPTIONS' : sold ? 'SOLD OUT' : selected ? 'ADDED TO PACK' : full ? 'PACK FULL' : 'ADD TO PACK';
+      const text = !optionsSelected ? 'SELECT OPTIONS' : sold ? 'SOLD OUT' : selected ? 'REMOVE FROM PACK' : full ? 'PACK FULL' : 'ADD TO PACK';
       button.innerHTML = `${selected ? '<span aria-hidden="true">✓</span>' : ''}${optionsSelected && !sold && !selected && !full ? '<span class="vs-add-plus" aria-hidden="true">+</span>' : ''}<span>${text}</span>`;
     }
     updateCard(card, previewVariant = null, syncGallery = false) {
@@ -909,22 +919,70 @@
         if (checkout.hasAttribute('data-native-checkout')) return window.location.assign(this.root + 'checkout');
         if (checkout.closest('.gokwik-checkout')) {
           if (typeof window.onCheckoutClick === 'function') return window.onCheckoutClick(checkout.querySelector('button') || checkout);
-          return window.location.assign(this.root + 'checkout');
+          // Do not silently fall back to Shopify checkout. A GoKwik-labelled
+          // button must only open GoKwik; a fallback here makes an incomplete
+          // GoKwik theme installation look like it is working.
+          throw new Error('GoKwik checkout is not ready. Enable the GoKwik app embed in this published theme and reload the page.');
         }
+        if (checkout.closest('.vs-custom-checkout')) return this.runCustomCheckout(checkout);
         // Shiprocket attaches its own click handler to the rendered control. Let it
         // run after the bundle has been added, without re-entering this listener.
-        const providerButton = checkout.matches('button, a, [role="button"]') ? checkout : checkout.querySelector('button, a, [role="button"]');
-        if (providerButton) {
-          this.handoffCheckout = true;
-          providerButton.click();
-          this.handoffCheckout = false;
-          return;
-        }
-        window.location.assign(this.root + 'checkout');
+        return this.handoffToProvider(checkout);
       } catch (error) {
         this.busy = false;
         this.showMessage(error.message, true);
         if (!this.destroyed) this.updateUI();
+      }
+    }
+    runCustomCheckout(checkout) {
+      const code = String(this.config.customCheckoutCode || '').trim();
+      // A custom button may be provider-supplied HTML (for example, Shoprocket's
+      // headless placeholder) without any additional JavaScript here. In that
+      // case, invoke the provider's rendered control. Never fall back to Shopify
+      // checkout: that masks a missing/incorrect provider integration.
+      if (!code) return this.handoffToProvider(checkout, true);
+      const payload = {
+        checkoutElement:checkout,
+        checkoutButton:checkout.querySelector('button, a, [role="button"]'),
+        cartUrl:this.root + 'cart',
+        checkoutUrl:this.root + 'checkout',
+        selectedItems:this.selected.map(item => ({id:item.variantId, quantity:1}))
+      };
+      try {
+        // This is merchant-authored storefront integration code. It receives only
+        // public checkout context after the bundle has been added to cart.
+        new Function('payload', 'window', 'document', code)(payload, window, document);
+      } catch (error) {
+        this.busy = false;
+        this.showMessage('Custom checkout could not be started. Please check its app-block code.', true);
+        if (!this.destroyed) this.updateUI();
+      }
+    }
+    handoffToProvider(checkout, isCustom = false) {
+      const providerButton = checkout.matches('button, a, [role="button"]')
+        ? checkout
+        : checkout.querySelector('button, a, [role="button"]');
+      // The generic custom trigger is deliberately not a Shopify checkout
+      // button. It only tells the merchant that a provider control is missing.
+      if (!providerButton || (isCustom && providerButton.classList.contains('vs-custom-checkout-trigger'))) {
+        throw new Error(isCustom
+          ? 'Custom checkout is not ready. Add the Shoprocket button HTML or custom checkout code, then reload the page.'
+          : 'Shiprocket checkout is not ready. Enable its app embed in this published theme and reload the page.');
+      }
+      // updateUI disables controls while cart items are being added. Re-enable the
+      // provider control briefly so its own click handler can receive this handoff.
+      const wasDisabled = 'disabled' in providerButton ? providerButton.disabled : false;
+      const previousAriaDisabled = providerButton.getAttribute('aria-disabled');
+      if ('disabled' in providerButton) providerButton.disabled = false;
+      providerButton.setAttribute('aria-disabled', 'false');
+      this.handoffCheckout = true;
+      try {
+        providerButton.click();
+      } finally {
+        this.handoffCheckout = false;
+        if ('disabled' in providerButton) providerButton.disabled = wasDisabled;
+        if (previousAriaDisabled === null) providerButton.removeAttribute('aria-disabled');
+        else providerButton.setAttribute('aria-disabled', previousAriaDisabled);
       }
     }
     canCheckout() { return !this.busy && this.selected.length === this.offerProducts; }
@@ -937,6 +995,7 @@
           : [...checkout.querySelectorAll('button, a, [role="button"]')];
         buttons.forEach(button => {
           if ('disabled' in button) button.disabled = !enabled;
+          if (button.id === 'gokwik-buy-now') button.classList.toggle('disabled', !enabled);
           button.setAttribute('aria-disabled', String(!enabled));
         });
       });
@@ -1053,10 +1112,17 @@
       "content": "Checkout"
     },
     {
-      "type": "checkbox",
-      "id": "enable_shopify_checkout",
-      "label": "Show Shopify native checkout",
-      "default": true
+      "type": "select",
+      "id": "checkout_provider",
+      "label": "Checkout button",
+      "default": "shopify",
+      "options": [
+        { "value": "shopify", "label": "Shopify checkout" },
+        { "value": "shiprocket", "label": "Shiprocket checkout" },
+        { "value": "gokwik", "label": "GoKwik checkout" },
+        { "value": "custom", "label": "Custom checkout" }
+      ],
+      "info": "Only the selected checkout button is shown. Shiprocket and GoKwik must already be installed in the theme."
     },
     {
       "type": "text",
@@ -1077,20 +1143,6 @@
       "default": "#ffffff"
     },
     {
-      "type": "checkbox",
-      "id": "enable_shiprocket_checkout",
-      "label": "Show Shiprocket checkout",
-      "default": false,
-      "info": "Enable only after Shiprocket has been installed and configured in this theme."
-    },
-    {
-      "type": "checkbox",
-      "id": "enable_gokwik_checkout",
-      "label": "Show GoKwik checkout",
-      "default": false,
-      "info": "Enable only after GoKwik has been installed and configured in this theme."
-    },
-    {
       "type": "text",
       "id": "gokwik_checkout_label",
       "label": "GoKwik button label",
@@ -1101,6 +1153,24 @@
       "id": "gokwik_checkout_note",
       "label": "GoKwik button note",
       "default": "Up to 10% off on Prepaid"
+    },
+    {
+      "type": "text",
+      "id": "custom_checkout_label",
+      "label": "Custom checkout button label",
+      "default": "Checkout"
+    },
+    {
+      "type": "textarea",
+      "id": "custom_checkout_button_html",
+      "label": "Custom checkout button HTML",
+      "info": "Paste the provider-approved button HTML (such as Shoprocket/Shiprocket). It is used after the bundle has been added to cart."
+    },
+    {
+      "type": "textarea",
+      "id": "custom_checkout_code",
+      "label": "Custom checkout code",
+      "info": "Optional. Use only when the provider requires JavaScript after the pack is added to cart. It receives payload, window, and document; never include private API keys."
     },
     {
       "type": "color_background",
