@@ -122,7 +122,6 @@
 </section>
 
 <style>
-#PBarNextFrameWrapper{display:none;}
 .vs-pills button{text-transform:capitalize !important;}
 .vs-checkout-area button.vs-native-checkout {color: #FFF;}
 .vs-bundle { --vs-ink:#1b1b1b; --vs-teal:#008b78; --vs-line:#e2e3e7; box-sizing:border-box; max-width:1208px; margin:0 auto; padding:30px 20px 160px; color:var(--vs-ink); font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; }
@@ -149,14 +148,14 @@
 .vs-dot::after { content:''; width:5px; height:5px; border-radius:50%; background:#ffffff75; }
 .vs-dot[aria-current="true"]::after { background:#fff; }
 .vs-chart-slide + .vs-gallery-dots .vs-dot::after { background:#888; }
-.vs-rating { position:absolute; bottom:4px; left:5px; z-index:2; font-size:8px; padding:1px 4px; color:#333; background:#ffffff28; border-radius:3px; }
+.vs-rating { position:absolute; bottom:4px; left:5px; z-index:2; font-size:10px; padding:1px 4px; color:#333; background:#ffffff; border-radius:3px; }
 .vs-rating-star { color:#ffb529; font-size:13px; vertical-align:-1px; }
 .vs-sold-overlay { position:absolute; inset:0; display:grid; place-items:center; background:#ffffff70; pointer-events:none; z-index:2; }
 .vs-sold-overlay span { background:#222; color:#fff; padding:10px 16px; border-radius:4px; font-size:12px; font-weight:600; }
-.vs-card-info { position:relative; padding:16px 12px 12px; display:flex; flex:1; flex-direction:column; }
+.vs-card-info { position:relative; isolation:isolate; padding:16px 12px 12px; display:flex; flex:1; flex-direction:column; }
 .vs-product-label { font-size:10px; font-weight:600; margin:0 30px 4px 0; }
 .vs-product-title { font-size:12px; font-weight:400; line-height:1.4; text-transform:uppercase; margin:0 26px 5px 0; }
-.vs-quick-view { position:absolute; right:12px; top:12px; width:24px; height:24px; display:grid; place-items:center; padding:4px; border:1px solid #e4e6eb; border-radius:50%; background:#f5f5f6; }
+.vs-quick-view { position:absolute; right:12px; top:12px; z-index:3; width:24px; height:24px; display:grid; place-items:center; padding:4px; border:1px solid #e4e6eb; border-radius:50%; background:#f5f5f6; pointer-events:auto; touch-action:manipulation; }
 .vs-quick-view svg { width:14px; height:14px; }
 .vs-card-price { display:flex; align-items:center; gap:7px; color:#999; font-size:13px; line-height:1.5; margin:0 0 4px; }
 .vs-card-price strong { color:var(--vs-ink); font-size:14px; font-weight:600; }
@@ -189,7 +188,9 @@
 .vs-load-more { display:block; margin:25px auto !important; padding:10px 20px; background:#fff; border:1px solid var(--vs-line); border-radius:5px; }
 .vs-empty, .vs-status { text-align:center; }
 .vs-status:empty { display:none; }
-.vs-modal { position:fixed; inset:0; z-index:2147483000; display:flex; align-items:center; justify-content:center; padding:16px; }
+.vs-modal { --vs-ink:#1b1b1b; --vs-teal:#008b78; --vs-line:#e2e3e7; position:fixed; inset:0; z-index:2147483000; display:flex; align-items:center; justify-content:center; padding:16px; color:var(--vs-ink); font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; isolation:isolate; }
+.vs-modal *, .vs-modal *::before, .vs-modal *::after { box-sizing:border-box; }
+.vs-modal[hidden] { display:none !important; }
 .vs-modal-overlay { position:absolute; inset:0; background:#0009; }
 .vs-modal-panel { position:relative; width:350px; max-width:100%; max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; background:#fff; border-radius:10px; scrollbar-width:auto; scrollbar-gutter:stable; scrollbar-color:#90908e #fff; }
 .vs-modal-panel::-webkit-scrollbar { width:14px; }
@@ -231,7 +232,12 @@
 .vs-modal-error { color:#b02b1b; font-size:11px; margin:6px 0; }
 .vs-policy-title { font-size:14px; margin:0 0 12px; }
 /* Collapsed pack footer; selected product tiles expand above the offer strip. */
-.vs-bottom-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e6e6e6; border-radius:7px 7px 0 0; box-shadow:0 -3px 18px #00000010; padding:12px 20px 14px; padding-bottom:max(14px,env(safe-area-inset-bottom)); z-index:1000; }
+.vs-bottom-bar { --vs-ink:#1b1b1b; --vs-teal:#008b78; --vs-line:#e2e3e7; position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e6e6e6; border-radius:7px 7px 0 0; box-shadow:0 -3px 18px #00000010; padding:12px 20px 14px; padding-bottom:max(14px,env(safe-area-inset-bottom)); color:var(--vs-ink); font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; z-index:2147482000; isolation:isolate; pointer-events:auto; -webkit-transform:translateZ(0); transform:translateZ(0); }
+.vs-bottom-bar *, .vs-bottom-bar *::before, .vs-bottom-bar *::after { box-sizing:border-box; }
+.vs-bottom-bar[hidden] { display:none !important; }
+.vs-bottom-bar button { font:inherit; color:inherit; cursor:pointer; margin:0; box-shadow:none; text-transform:uppercase; letter-spacing:.5px; }
+.vs-bottom-bar button::before, .vs-bottom-bar button::after { box-shadow:none; }
+.vs-bottom-bar button:disabled { cursor:not-allowed; }
 .vs-bottom-inner { max-width:1312px; margin:0 auto; }
 .vs-pack-details { border-bottom:1px solid var(--vs-line); margin-bottom:11px; padding-bottom:12px; }
 .vs-selected-items { display:flex; gap:14px; overflow:auto; max-height:30vh; padding:5px 5px 0 0; }
@@ -272,6 +278,7 @@
 .vs-checkout-area { flex:0 1 300px; min-width:180px; }
 .vs-checkout-buttons { display:grid; gap:8px; width:100%; }
 .vs-native-checkout, .vs-fastrr-btn button, .vs-fastrr-btn a, .vs-fastrr-btn [role="button"], .gokwik-checkout button, .vs-custom-checkout button, .vs-custom-checkout a, .vs-custom-checkout [role="button"] { width:100%; min-height:48px; background:#1b1b1b; color:#fff; border:0; border-radius:6px; padding:10px 16px; text-decoration:none; }
+.vs-bottom-bar button, .vs-bottom-bar a, .vs-bottom-bar [role="button"] { touch-action:manipulation; }
 .vs-native-checkout { background:var(--vs-native-checkout-bg); color:var(--vs-native-checkout-text); font-weight:700; }
 .vs-fastrr-btn:empty { min-height:48px; border-radius:6px; background:#f1f3f5; }
 .vs-fastrr-btn:empty::before { content:'Shiprocket checkout will load here'; display:grid; min-height:48px; place-items:center; color:#59636e; font-size:11px; }
@@ -336,21 +343,44 @@
       this.discountValue = Math.max(0, Number(this.config.discountValue) || 0);
       this.root = window.Shopify?.routes?.root || '/';
       this.products = new Map();
+      this.loadedPageURLs = new Set();
       this.selected = [];
       this.busy = false;
       this.packExpanded = false;
-      this.events = new AbortController();
+      // `AbortSignal` in addEventListener is not available on older iOS Safari.
+      // Store listeners ourselves so the bundle still initializes there.
+      this.events = typeof AbortController === 'function' ? new AbortController() : null;
+      this.listeners = [];
       this.grid = section.querySelector('[data-grid]');
       this.modal = section.querySelector('[data-modal]');
       this.panel = this.modal.querySelector('.vs-modal-panel');
       this.modalContent = this.modal.querySelector('[data-modal-content]');
       this.loadButton = section.querySelector('[data-load-more]');
+      this.bottomBar = section.querySelector('[data-bottom-bar]');
+      this.packDetails = this.bottomBar.querySelector('[data-pack-details]');
+      this.packToggle = this.bottomBar.querySelector('[data-pack-toggle]');
+      this.selectedItems = this.bottomBar.querySelector('[data-selected-items]');
+      this.packPreview = this.bottomBar.querySelector('[data-pack-preview]');
+      this.itemCount = this.bottomBar.querySelector('[data-item-count]');
+      this.total = this.bottomBar.querySelector('[data-total]');
+      this.originalTotal = this.bottomBar.querySelector('[data-original-total]');
+      this.savings = this.bottomBar.querySelector('[data-savings]');
+      this.bundleDeal = this.bottomBar.querySelector('[data-bundle-deal]');
+      this.offerInfo = this.bottomBar.querySelector('[data-offer-info]');
+      this.packSteps = this.bottomBar.querySelector('[data-pack-steps]');
       this.checkouts = [...section.querySelectorAll('[data-checkout]')];
       this.storageKey = `vs-bundle:${this.id}:${window.location.pathname}`;
       this.attopHandle = new URLSearchParams(window.location.search).get('attop')?.trim().replace(/^["']|["']$/g, '') || '';
+      this.portalBottomBar();
+      this.portalModal();
       this.appendProducts(JSON.parse(section.querySelector('[data-bundle-products]').textContent));
       if (this.attopHandle) this.pinProductFromURL();
-      this.on(section, 'click', event => this.handleClick(event));
+      // Capture before theme card handlers. A number of themes stop bubbling
+      // clicks from product cards, which otherwise prevents Quick View and
+      // option buttons from reaching this bundle's delegated handler.
+      this.on(section, 'click', event => this.handleClick(event), {capture:true});
+      this.on(this.bottomBar, 'click', event => this.handleClick(event), {capture:true});
+      this.on(this.modal, 'click', event => this.handleClick(event), {capture:true});
       this.on(this.modal.querySelector('.vs-modal-overlay'), 'click', () => this.closeModal());
       this.on(document, 'keydown', event => this.handleKeydown(event));
       this.checkouts.forEach(checkout => this.on(checkout, 'click', event => {
@@ -372,7 +402,37 @@
     }
 
     on(target, type, listener, options = {}) {
-      target.addEventListener(type, listener, {...options, signal:this.events.signal});
+      target.addEventListener(type, listener, options);
+      this.listeners.push({target, type, listener, options});
+    }
+    portalBottomBar() {
+      // Some themes apply transform/contain/overflow to their main content. In
+      // iOS Safari that makes a nested `position: fixed` footer either scroll
+      // with the page or sit behind another sticky cart. Keep it at document
+      // level, where it is fixed to the viewport and outside theme overlays.
+      if (!this.bottomBar || !document.body || this.bottomBar.parentElement === document.body) return;
+      // CSS custom properties normally inherit from the section. Preserve the
+      // merchant's checkout button colours after moving the footer to <body>.
+      const styles = window.getComputedStyle(this.section);
+      ['--vs-native-checkout-bg', '--vs-native-checkout-text'].forEach(name => {
+        const value = styles.getPropertyValue(name).trim();
+        if (value) this.bottomBar.style.setProperty(name, value);
+      });
+      document.body.appendChild(this.bottomBar);
+      this.bottomBar.dataset.vsBundleOwner = this.id;
+    }
+    portalModal() {
+      // The sticky pack footer is portalled above theme layout containers. The
+      // Quick View must be portalled too; otherwise a transformed theme parent
+      // can place the footer above part of the modal on iPhone.
+      if (!this.modal || !document.body || this.modal.parentElement === document.body) return;
+      const styles = window.getComputedStyle(this.section);
+      ['--vs-image-bg'].forEach(name => {
+        const value = styles.getPropertyValue(name).trim();
+        if (value) this.modal.style.setProperty(name, value);
+      });
+      document.body.appendChild(this.modal);
+      this.modal.dataset.vsBundleOwner = this.id;
     }
     money(value) {
       try {
@@ -424,7 +484,7 @@
       const existing = [...this.products.values()].find(entry => String(entry.product.handle || '').toLowerCase() === handle);
       if (existing) return this.pinProductCard(existing);
       try {
-        const response = await fetch(`${this.root}products/${encodeURIComponent(this.attopHandle)}.js`, {signal:this.events.signal});
+        const response = await fetch(`${this.root}products/${encodeURIComponent(this.attopHandle)}.js`, this.events ? {signal:this.events.signal} : {});
         if (!response.ok) return;
         const product = await response.json();
         if (!product?.id) return;
@@ -589,15 +649,20 @@
       this.updateCard(card, null, !!selectedVariant);
     }
     appendProducts(data) {
-      for (const entry of data.products || []) {
+      const products = Array.isArray(data?.products) ? data.products : [];
+      let added = 0;
+      for (const entry of products) {
+        if (!entry?.product?.id) continue;
         const key = String(entry.product.id);
         if (this.products.has(key)) continue;
         this.products.set(key, entry);
         this.renderCard(entry);
+        added += 1;
       }
-      this.nextURL = data.next;
+      this.nextURL = typeof data?.next === 'string' && data.next ? data.next : null;
       this.loadButton.hidden = !this.nextURL;
       this.updateEmptyState();
+      return added;
     }
     async loadMore() {
       if (!this.nextURL || this.loading || this.destroyed) return;
@@ -611,12 +676,29 @@
         // not this app block's ID. Keeping loading manual avoids repeated
         // requests when the button remains visible after a response.
         if (this.shopifySectionId) url.searchParams.set('section_id', this.shopifySectionId);
-        const response = await fetch(url, {signal:this.events.signal});
+        const response = await fetch(url, this.events ? {signal:this.events.signal} : {});
         if (!response.ok) throw new Error('Unable to load products.');
         const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
         const data = doc.querySelector('[data-bundle-products]');
         if (!data) throw new Error('Products were not returned.');
-        this.appendProducts(JSON.parse(data.textContent));
+        const payload = JSON.parse(data.textContent);
+        if (!Array.isArray(payload?.products)) throw new Error('Products were not returned.');
+        const requestURL = url.href;
+        if (this.loadedPageURLs.has(requestURL)) {
+          this.nextURL = null;
+          this.loadButton.hidden = true;
+          return;
+        }
+        this.loadedPageURLs.add(requestURL);
+        const previousNextURL = this.nextURL;
+        const added = this.appendProducts(payload);
+        // A repeated or empty page is a theme pagination response error. Stop
+        // instead of repeatedly requesting it or showing duplicate products.
+        if (!added || this.nextURL === previousNextURL) {
+          this.nextURL = null;
+          this.loadButton.hidden = true;
+          return;
+        }
         this.loadButton.textContent = 'Load more products';
       } catch (error) {
         if (error.name !== 'AbortError') {
@@ -629,7 +711,7 @@
       }
     }
     handleClick(event) {
-      const button = event.target.closest('button');
+      const button = event.target instanceof Element ? event.target.closest('button') : null;
       if (!button || button.disabled) return;
       const card = button.closest('.vs-card');
       const entry = card ? this.products.get(card.dataset.productId) : null;
@@ -1002,46 +1084,49 @@
     }
     updatePackDisclosure() {
       if (!this.selected.length) this.packExpanded = false;
-      this.section.querySelector('[data-pack-details]').hidden = !this.packExpanded;
-      this.section.querySelector('[data-pack-toggle]').setAttribute('aria-expanded', String(this.packExpanded));
+      this.packDetails.hidden = !this.packExpanded;
+      this.packToggle.setAttribute('aria-expanded', String(this.packExpanded));
     }
     updateUI() {
       this.grid.querySelectorAll('.vs-card').forEach(card => this.updateCard(card));
       if (this.currentEntry) this.updateModalVariant();
       const count = this.selected.length;
-      this.section.querySelector('[data-bottom-bar]').hidden = !count;
-      this.section.querySelector('[data-selected-items]').innerHTML = this.selected.map(item => `<div class="vs-selected-item">
+      this.bottomBar.hidden = !count;
+      this.selectedItems.innerHTML = this.selected.map(item => `<div class="vs-selected-item">
         <div class="vs-selected-photo">${item.image ? `<img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.title)}" width="45" height="46">` : ''}<span class="vs-item-quantity">1</span></div>
         <div class="vs-selected-copy"><span class="vs-selected-label">${escapeHTML(item.label || '')}</span><strong class="vs-selected-title">${escapeHTML(item.title)}</strong><span class="vs-selected-variant">${escapeHTML(item.variantTitle || '')}</span><span class="vs-selected-price">${this.money(item.price)}</span></div>
         <button type="button" data-remove="${escapeHTML(item.variantId)}" aria-label="Remove ${escapeHTML(item.title)} from pack" ${this.busy ? 'disabled' : ''}>×</button>
       </div>`).join('');
-      this.section.querySelector('[data-pack-preview]').innerHTML = this.selected.slice(0,3).filter(item => item.image).map(item => `<img src="${escapeHTML(item.image)}" alt="" width="30" height="32">`).join('');
-      this.section.querySelector('[data-item-count]').textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
+      this.packPreview.innerHTML = this.selected.slice(0,3).filter(item => item.image).map(item => `<img src="${escapeHTML(item.image)}" alt="" width="30" height="32">`).join('');
+      this.itemCount.textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
       const regular = this.selected.reduce((sum, item) => sum + item.price, 0);
       const compare = this.selected.reduce((sum, item) => sum + Math.max(item.price, item.comparePrice || 0), 0);
       const offer = count === this.offerProducts;
       const total = offer ? this.offerTotal(regular) : regular;
-      this.section.querySelector('[data-total]').textContent = this.money(total);
-      const originalElement = this.section.querySelector('[data-original-total]');
+      this.total.textContent = this.money(total);
+      const originalElement = this.originalTotal;
       originalElement.hidden = compare <= total;
       originalElement.textContent = this.money(compare);
-      const savings = this.section.querySelector('[data-savings]');
+      const savings = this.savings;
       savings.hidden = compare <= total;
       savings.textContent = `SAVE ${this.money(Math.max(0, compare - total))}`;
-      this.section.querySelector('[data-bundle-deal]').textContent = this.offerText();
+      this.bundleDeal.textContent = this.offerText();
       const remaining = Math.max(0, this.offerProducts - count);
-      this.section.querySelector('[data-offer-info]').innerHTML = remaining ? `Just <strong>${remaining} more</strong> for best deal!` : '<strong>Your pack is complete!</strong>';
+      this.offerInfo.innerHTML = remaining ? `Just <strong>${remaining} more</strong> for best deal!` : '<strong>Your pack is complete!</strong>';
       const check = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 4 4L19 6" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      this.section.querySelector('[data-pack-steps]').innerHTML = Array.from({length:this.offerProducts}, (_,index) => `<li class="vs-pack-step ${index < count ? 'is-complete' : index === count ? 'is-next' : ''}" aria-label="Product ${index + 1}: ${index < count ? 'added' : 'remaining'}"><span class="vs-step-circle">${index < count ? check : index + 1}</span></li>`).join('');
+      this.packSteps.innerHTML = Array.from({length:this.offerProducts}, (_,index) => `<li class="vs-pack-step ${index < count ? 'is-complete' : index === count ? 'is-next' : ''}" aria-label="Product ${index + 1}: ${index < count ? 'added' : 'remaining'}"><span class="vs-step-circle">${index < count ? check : index + 1}</span></li>`).join('');
       this.updatePackDisclosure();
       this.updateCheckout();
     }
     destroy() {
       this.closeModal();
       this.destroyed = true;
-      this.events.abort();
+      this.listeners.forEach(({target, type, listener, options}) => target.removeEventListener(type, listener, options));
+      this.events?.abort();
       this.observer?.disconnect();
       this.checkoutObserver?.disconnect();
+      this.bottomBar?.remove();
+      this.modal?.remove();
       delete this.section.vsBundle;
     }
     static mount(root) {
@@ -1054,7 +1139,11 @@
   VSBundleSection.mount(document);
   document.addEventListener('DOMContentLoaded', () => VSBundleSection.mount(document), {once:true});
   document.addEventListener('shopify:section:load', event => VSBundleSection.mount(event.target));
-  document.addEventListener('shopify:section:unload', event => event.target.querySelectorAll('.vs-bundle').forEach(section => section.vsBundle?.destroy()));
+  document.addEventListener('shopify:section:unload', event => {
+    const target = event.target;
+    if (target.matches?.('.vs-bundle')) target.vsBundle?.destroy();
+    target.querySelectorAll?.('.vs-bundle').forEach(section => section.vsBundle?.destroy());
+  });
 })();
 
 </script>
