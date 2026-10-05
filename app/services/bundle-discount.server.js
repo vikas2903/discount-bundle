@@ -155,7 +155,7 @@ export async function createBundleDiscount(
 
 export async function updateBundleDiscount(
   admin,
-  { id, title, startsAt, endsAt, functionHandle, config },
+  { id, title, startsAt, endsAt, functionHandle, config, previousConfig },
 ) {
   const response = await admin.graphql(
     `#graphql
@@ -189,6 +189,7 @@ export async function updateBundleDiscount(
           endsAt,
           functionHandle,
           config,
+          previousConfig,
         }),
       },
     },

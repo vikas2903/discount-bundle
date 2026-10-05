@@ -39,17 +39,17 @@ export const action = async ({ request }) => {
     return redirect(getBillingPathWithShop(request, session));
   }
   const formData = await request.formData();
-  const { config, invalidCollectionIds } = buildBundleConfig(formData);
+  const { config, invalidCollectionIds, invalidProductIds, invalidSegmentIds } = buildBundleConfig(formData);
   const validationErrors = validateBundleConfig(
     config,
     formData.getAll("bundleTierQuantity").length,
   );
 
-  if (invalidCollectionIds.length > 0) {
+  if (invalidCollectionIds.length > 0 || invalidProductIds.length > 0 || invalidSegmentIds.length > 0) {
     return {
       ok: false,
       error:
-        "Collection IDs must be numeric IDs or Shopify GIDs like gid://shopify/Collection/123.",
+        "Collection, product, and customer segment values must be numeric IDs or Shopify GIDs.",
     };
   }
 
@@ -96,23 +96,26 @@ export default function NewBundleDiscountPage() {
   const navigation = useNavigation();
 
   return (
-    <s-page heading="Create bundle discount">
-      <s-button
-        slot="secondary-actions"
-        onClick={() => navigate("/app/disocunt_bundle")}
-      >
-        Back to discounts
-      </s-button> 
-      <s-section align="center" size="large"  heading="New automatic discount">
+    <s-page>
+      <div className="bundle-page-shell">
+        <div className="bundle-page-header">
+          <div>
+            <h1>Create a bundle discount</h1>
+            <p>Configure your offer, control how it applies, and preview the customer experience.</p>
+          </div>
+          <button
+            className="bundle-button bundle-back-button"
+            type="button"
+            onClick={() => navigate("/app/disocunt_bundle")}
+          >
+            Back to discounts
+          </button>
+        </div>
         {loadError ? (
           <s-banner tone="critical">
             <s-paragraph>{loadError}</s-paragraph>
           </s-banner>
         ) : null}
-        <s-paragraph>
-          Create a bundle offer in three clear steps: basics, pricing tiers, and
-          target collections.
-        </s-paragraph>
         <Form method="post">
           <BundleDiscountForm
             action="create"
@@ -123,7 +126,7 @@ export default function NewBundleDiscountPage() {
             error={actionData?.error}
           />
         </Form>
-      </s-section>
+      </div>
     </s-page>
   );
 }

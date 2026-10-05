@@ -1,10 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import { DatePicker } from "antd";
-import dayjs from "dayjs";
-
-const { RangePicker } = DatePicker;
 
 export default function VolumeDiscountForm({
   fetcher,
@@ -19,8 +15,8 @@ export default function VolumeDiscountForm({
   const isSaving = fetcher.state !== "idle";
   const shopify = useAppBridge();
   const [scheduleRange, setScheduleRange] = useState(() => [
-    toDayjs(editingSchedule?.startsAt) || dayjs(),
-    toDayjs(editingSchedule?.endsAt),
+    toDateTimeInput(editingSchedule?.startsAt) || currentDateTimeInput(),
+    toDateTimeInput(editingSchedule?.endsAt),
   ]);
   const selectedCollectionIds = form.selectedCollectionIds;
   const selectedCollectionTitles = useMemo(() => {
@@ -94,12 +90,12 @@ export default function VolumeDiscountForm({
       <input
         type="hidden"
         name="startsAt"
-        value={scheduleRange[0]?.toISOString() || ""}
+        value={scheduleRange[0] || ""}
       />
       <input
         type="hidden"
         name="endsAt"
-        value={scheduleRange[1]?.toISOString() || ""}
+        value={scheduleRange[1] || ""}
       />
       <input type="hidden" name="config" value={JSON.stringify(form)} />
 
@@ -134,15 +130,32 @@ export default function VolumeDiscountForm({
               Select a start date and time, with an optional end date and time.
               Shopify activates scheduled offers automatically.
             </s-paragraph>
-            <RangePicker
-              showTime
-              allowEmpty={[false, true]}
-              format="DD MMM YYYY, HH:mm"
-              value={scheduleRange}
-              onChange={(range) => setScheduleRange(range || [null, null])}
-              style={{ width: "100%" }}
-              placeholder={["Start date and time", "End date and time (optional)"]}
-            />
+            <div style={scheduleFieldsStyle}>
+              <label style={scheduleFieldLabelStyle}>
+                Start date and time
+                <input
+                  type="datetime-local"
+                  value={scheduleRange[0] || ""}
+                  onChange={(event) =>
+                    setScheduleRange([event.target.value, scheduleRange[1]])
+                  }
+                  required
+                  style={scheduleInputStyle}
+                />
+              </label>
+              <label style={scheduleFieldLabelStyle}>
+                End date and time (optional)
+                <input
+                  type="datetime-local"
+                  value={scheduleRange[1] || ""}
+                  min={scheduleRange[0] || undefined}
+                  onChange={(event) =>
+                    setScheduleRange([scheduleRange[0], event.target.value])
+                  }
+                  style={scheduleInputStyle}
+                />
+              </label>
+            </div>
             <div style={scheduleSummaryStyle}>
               <strong>{scheduleSummary.label}</strong>
               <span>{scheduleSummary.detail}</span>
@@ -269,13 +282,13 @@ function getEventValue(event) {
   );
 }
 
-function toDayjs(value) {
+function toDateTimeInput(value) {
   if (!value) {
-    return null;
+    return "";
   }
 
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed : null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : formatDateTimeInput(parsed);
 }
 
 function getScheduleSummary(range) {
@@ -285,15 +298,37 @@ function getScheduleSummary(range) {
     return { label: "Choose a start time", detail: "The offer cannot be scheduled yet." };
   }
 
-  const startsLabel = startsAt.format("DD MMM YYYY, HH:mm");
+  const startsLabel = formatScheduleTime(startsAt);
   if (!endsAt) {
     return { label: "Starts automatically", detail: `${startsLabel} and continues until you turn it off.` };
   }
 
   return {
     label: "Scheduled time range",
-    detail: `${startsLabel} to ${endsAt.format("DD MMM YYYY, HH:mm")}`,
+    detail: `${startsLabel} to ${formatScheduleTime(endsAt)}`,
   };
+}
+
+function currentDateTimeInput() {
+  return formatDateTimeInput(new Date());
+}
+
+function formatDateTimeInput(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatScheduleTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 const scheduleSummaryStyle = {
@@ -304,6 +339,28 @@ const scheduleSummaryStyle = {
   background: "#eff6ff",
   color: "#1e3a8a",
   fontSize: "0.9rem",
+};
+
+const scheduleFieldsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+  gap: "0.75rem",
+};
+
+const scheduleFieldLabelStyle = {
+  display: "grid",
+  gap: "0.35rem",
+  fontWeight: 600,
+};
+
+const scheduleInputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  minHeight: "2.5rem",
+  padding: "0.5rem 0.65rem",
+  border: "1px solid #8a8a8a",
+  borderRadius: "0.5rem",
+  font: "inherit",
 };
 
 const collectionSelectionStyle = {

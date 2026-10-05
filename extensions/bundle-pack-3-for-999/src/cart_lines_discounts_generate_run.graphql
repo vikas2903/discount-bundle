@@ -1,5 +1,15 @@
 query CartInput($selectedCollectionIds: [ID!]) {
   cart {
+    cost {
+      subtotalAmount {
+        amount
+      }
+    }
+    buyerIdentity {
+      customer {
+        numberOfOrders
+      }
+    }
     lines {
       id
       quantity

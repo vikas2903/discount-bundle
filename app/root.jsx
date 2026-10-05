@@ -1,5 +1,4 @@
 import {
-  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
@@ -7,6 +6,7 @@ import {
   ScrollRestoration,
   useRouteError,
 } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 import "antd/dist/reset.css";
 
 export default function App() {
@@ -33,29 +33,9 @@ export default function App() {
 }
 
 export function ErrorBoundary() {
-  const error = useRouteError();
-  const message = isRouteErrorResponse(error)
-    ? `Shopify returned ${error.status}: ${error.statusText || "Unable to open this page"}.`
-    : "The app could not load. Please reopen it from Shopify Admin.";
-
-  console.error("[app] Unhandled route error", error);
-
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <Meta />
-        <Links />
-      </head>
-      <body>
-        <main style={{ fontFamily: "Arial, sans-serif", padding: "2rem" }}>
-          <h1>Unable to load Discount bundle App</h1>
-          <p>{message}</p>
-          <p>Please reopen the app from Shopify Admin. If this continues, check the Railway deployment logs.</p>
-        </main>
-        <Scripts />
-      </body>
-    </html>
-  );
+  // The Shopify authentication layer deliberately throws HTML recovery
+  // responses when an embedded session needs to be refreshed. Rendering a
+  // custom error page here swallowed that response and left merchants on the
+  // "Unable to load" screen. Let Shopify return its App Bridge recovery page.
+  return boundary.error(useRouteError());
 }

@@ -309,6 +309,8 @@ function DiscountBundleListPage() {
                       const discountLabel = leadTier
                         ? leadTier.discountType === "percentage"
                           ? `Buy ${leadTier.quantity}: ${leadTier.value}% off`
+                          : leadTier.discountType === "free"
+                            ? `Buy ${leadTier.quantity}, get ${leadTier.freeQuantity} free`
                           : `Buy ${leadTier.quantity}: fixed price ${leadTier.value}`
                         : "No offer details";
                       const typeLabel =

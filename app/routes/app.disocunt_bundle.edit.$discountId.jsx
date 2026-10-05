@@ -91,17 +91,17 @@ export const action = async ({ request, params }) => {
     }
   }
 
-  const { config, invalidCollectionIds } = buildBundleConfig(formData);
+  const { config, invalidCollectionIds, invalidProductIds, invalidSegmentIds } = buildBundleConfig(formData);
   const validationErrors = validateBundleConfig(
     config,
     formData.getAll("bundleTierQuantity").length,
   );
 
-  if (invalidCollectionIds.length > 0) {
+  if (invalidCollectionIds.length > 0 || invalidProductIds.length > 0 || invalidSegmentIds.length > 0) {
     return {
       ok: false,
       error:
-        "Collection IDs must be numeric IDs or Shopify GIDs like gid://shopify/Collection/123.",
+        "Collection, product, and customer segment values must be numeric IDs or Shopify GIDs.",
     };
   }
 
@@ -113,13 +113,22 @@ export const action = async ({ request, params }) => {
   }
 
   try {
+    const existing = await getBundleDiscount(admin, params.discountId);
+    // Keep discounts created by the previous builder on their original
+    // calculation path. Editing a legacy discount must not silently turn it
+    // into the newer product-discount implementation.
+    const configToSave =
+      Number(existing.discount?.config?.version) < 2
+        ? { ...config, version: 1 }
+        : config;
     const result = await updateBundleDiscount(admin, {
       id: params.discountId,
       title: formData.get("title"),
       startsAt: toIsoDateTime(formData.get("startsAt")),
       endsAt: toIsoDateTime(formData.get("endsAt")),
       functionHandle: resolveFunctionHandle(),
-      config,
+      config: configToSave,
+      previousConfig: existing.discount?.config,
     });
 
     if (result.ok) {
@@ -151,30 +160,38 @@ export default function EditBundleDiscountPage() {
   const isActive = discount.status === "ACTIVE";
 
   return (
-    <s-page heading="Edit bundle discount">
-      <s-button
-        slot="secondary-actions"
-        onClick={() => navigate("/app/disocunt_bundle")}
-      >
-        Back to discounts
-      </s-button>
-      <statusFetcher.Form method="post">
-        <input type="hidden" name="intent" value="toggle-status" />
-        <input
-          type="hidden"
-          name="nextStatus"
-          value={isActive ? "disable" : "enable"}
-        />
-        <s-button
-          slot="primary-action"
-          type="submit"
-          variant="secondary"
-          loading={statusFetcher.state !== "idle"}
-        >
-          {isActive ? "Deactivate" : "Activate"}
-        </s-button>
-      </statusFetcher.Form>
-      <s-section heading={discount.title}>
+    <s-page>
+      <div className="bundle-page-shell">
+        <div className="bundle-page-header">
+          <div>
+            <h1>Edit bundle discount</h1>
+            <p>Update this offer without recreating the active Shopify discount.</p>
+          </div>
+          <div className="bundle-header-actions">
+            <button
+              className="bundle-button bundle-back-button"
+              type="button"
+              onClick={() => navigate("/app/disocunt_bundle")}
+            >
+              Back to discounts
+            </button>
+            <statusFetcher.Form method="post">
+              <input type="hidden" name="intent" value="toggle-status" />
+              <input
+                type="hidden"
+                name="nextStatus"
+                value={isActive ? "disable" : "enable"}
+              />
+              <button
+                className="bundle-button"
+                type="submit"
+                disabled={statusFetcher.state !== "idle"}
+              >
+                {isActive ? "Deactivate" : "Activate"}
+              </button>
+            </statusFetcher.Form>
+          </div>
+        </div>
         {loadError ? (
           <s-banner tone="critical">
             <s-paragraph>{loadError}</s-paragraph>
@@ -185,13 +202,6 @@ export default function EditBundleDiscountPage() {
             <s-paragraph>{statusFetcher.data.error}</s-paragraph>
           </s-banner>
         ) : null}
-        <s-paragraph>
-          Update this bundle with a clearer setup flow for pricing, timing, and
-          target collections without recreating the discount.
-        </s-paragraph>
-        <s-paragraph>
-          Current status: {isActive ? "Active" : "Inactive"}
-        </s-paragraph>
         <Form method="post">
           <BundleDiscountForm
             action="update"
@@ -202,7 +212,7 @@ export default function EditBundleDiscountPage() {
             error={actionData?.error}
           />
         </Form>
-      </s-section>
+      </div>
     </s-page>
   );
 }

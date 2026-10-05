@@ -1,5 +1,5 @@
 import { DiscountClass } from "../generated/api";
-import { runBundleDiscount } from "./bundle_discount";
+import { isBundleDiscountConfig, runBundleDiscount } from "./bundle_discount";
 import { runVolumeDiscount } from "./volume_discount";
 import { runFlatOffDiscount } from "./flat_off_discount";
 
@@ -21,6 +21,10 @@ export function cartLinesDiscountsGenerateRun(input) {
   const volumeConfigValue = input.discount.volumeConfig?.value;
   const flatOffConfigValue = input.discount.functionConfig?.value;
 
+  if (bundleConfigValue && isBundleDiscountConfig(bundleConfigValue)) {
+    return runBundleDiscount(input, bundleConfigValue);
+  }
+
   if (input.discount.discountClasses.includes(DiscountClass.Product)) {
     if (flatOffConfigValue) {
       return runFlatOffDiscount(input, flatOffConfigValue);
@@ -31,14 +35,6 @@ export function cartLinesDiscountsGenerateRun(input) {
     }
 
     return { operations: [] };
-  }
-
-  if (input.discount.discountClasses.includes(DiscountClass.Order)) {
-    if (!bundleConfigValue) {
-      return { operations: [] };
-    }
-
-    return runBundleDiscount(input, bundleConfigValue);
   }
 
   return { operations: [] };
