@@ -8,17 +8,23 @@ export function runVolumeDiscount(input, configValue) {
     return runLegacyProductVolumeDiscount(input, config);
   }
 
+  const qualifyingLines = [];
   for (const line of input.cart.lines) {
     const productId = line.merchandise?.product?.id;
     if (!productId) {
       continue;
     }
 
-    const appliesToAllProducts = !config.selectedCollectionIds.length;
+    const appliesToAllProducts = config.productMode === 'all';
     const inSelectedCollections =
       line.merchandise?.product?.inSelectedCollections === true;
+    const isSelectedProduct = config.selectedProductIds.includes(productId);
 
-    if (!appliesToAllProducts && !inSelectedCollections) {
+    if (
+      !appliesToAllProducts &&
+      !(config.productMode === 'collections' && inSelectedCollections) &&
+      !(config.productMode === 'products' && isSelectedProduct)
+    ) {
       continue;
     }
 
@@ -30,6 +36,26 @@ export function runVolumeDiscount(input, configValue) {
       continue;
     }
 
+    qualifyingLines.push({line, matchedTier});
+  }
+
+  if (config.newCustomersOnly && input.cart.buyerIdentity?.customer?.numberOfOrders !== 0) {
+    return {operations: []};
+  }
+
+  const direction = config.application.priority === 'most_expensive' ? -1 : 1;
+  qualifyingLines.sort(
+    (left, right) =>
+      direction * (linePrice(left.line) - linePrice(right.line)),
+  );
+  const applicationLimit =
+    config.application.method === 'once'
+      ? 1
+      : config.application.method === 'limit'
+        ? config.application.maxApplications
+        : Infinity;
+
+  for (const {line, matchedTier} of qualifyingLines.slice(0, applicationLimit)) {
     if (matchedTier.discountType === 'fixed') {
       candidates.push({
         message: resolveVolumeMessage(config.message, matchedTier.label),
@@ -41,19 +67,17 @@ export function runVolumeDiscount(input, configValue) {
           },
         },
       });
-
-      continue;
-    }
-
-    candidates.push({
-      message: resolveVolumeMessage(config.message, matchedTier.label),
-      targets: [{cartLine: {id: line.id, quantity: matchedTier.minQty}}],
-      value: {
-        percentage: {
-          value: matchedTier.discountValue.toFixed(2),
+    } else {
+      candidates.push({
+        message: resolveVolumeMessage(config.message, matchedTier.label),
+        targets: [{cartLine: {id: line.id, quantity: matchedTier.minQty}}],
+        value: {
+          percentage: {
+            value: matchedTier.discountValue.toFixed(2),
+          },
         },
-      },
-    });
+      });
+    }
   }
 
   if (!candidates.length) {
@@ -76,6 +100,10 @@ function parseVolumeConfig(value) {
   const fallback = {
     message: 'Volume discount applied',
     selectedCollectionIds: [],
+    selectedProductIds: [],
+    productMode: 'all',
+    newCustomersOnly: false,
+    application: {method: 'repeat', maxApplications: 0, priority: 'cheapest'},
     tiers: [],
     mode: 'collection',
     products: [],
@@ -98,6 +126,27 @@ function parseVolumeConfig(value) {
             .map((collectionId) => String(collectionId || '').trim())
             .filter(Boolean)
         : fallback.selectedCollectionIds,
+      selectedProductIds: Array.isArray(config.selectedProductIds)
+        ? config.selectedProductIds
+            .map((productId) => String(productId || '').trim())
+            .filter(Boolean)
+        : fallback.selectedProductIds,
+      productMode: resolveProductMode(
+        config.productMode,
+        config.selectedCollectionIds,
+        config.selectedProductIds,
+      ),
+      newCustomersOnly: Boolean(config.newCustomersOnly),
+      application: {
+        method: ['once', 'limit', 'repeat'].includes(config.application?.method)
+          ? config.application.method
+          : fallback.application.method,
+        maxApplications: toNonNegativeInteger(config.application?.maxApplications, 0),
+        priority:
+          config.application?.priority === 'most_expensive'
+            ? 'most_expensive'
+            : 'cheapest',
+      },
       tiers: Array.isArray(config.tiers)
         ? config.tiers
             .map((tier) => ({
@@ -149,6 +198,20 @@ function resolveVolumeMessage(configMessage, tierLabel) {
   }
 
   return configMessage;
+}
+
+function resolveProductMode(value, collectionIds, productIds) {
+  if (value === 'all' || value === 'collections' || value === 'products') {
+    return value;
+  }
+
+  if (Array.isArray(productIds) && productIds.length > 0) {
+    return 'products';
+  }
+
+  return Array.isArray(collectionIds) && collectionIds.length > 0
+    ? 'collections'
+    : 'all';
 }
 
 function runLegacyProductVolumeDiscount(input, config) {
@@ -231,4 +294,18 @@ function toPositiveNumber(value, fallback) {
   return Number.isFinite(numberValue) && numberValue > 0
     ? numberValue
     : fallback;
+}
+
+function toNonNegativeInteger(value, fallback) {
+  const numberValue = Number(value);
+
+  return Number.isInteger(numberValue) && numberValue >= 0
+    ? numberValue
+    : fallback;
+}
+
+function linePrice(line) {
+  const price = Number(line.cost?.amountPerQuantity?.amount || 0);
+
+  return Number.isFinite(price) ? price : 0;
 }

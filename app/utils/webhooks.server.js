@@ -14,7 +14,7 @@ export const webhookHealth = () => textResponse("ok");
  * Verify the raw bytes directly: authenticate.webhook() can refresh an expired
  * offline token, which fails after uninstall because Shopify revoked the token.
  */
-export function createWebhookAction(topics, { env = process.env, logger = console } = {}) {
+export function createWebhookAction(topics, { env = process.env, logger = console, onPayload } = {}) {
   return async ({ request }) => {
     const started = Date.now();
     let topic;
@@ -76,8 +76,10 @@ export function createWebhookAction(topics, { env = process.env, logger = consol
         return finish(400, "invalid_payload");
       }
 
-      // Acknowledge receipt only. This does not erase stored data or update
-      // session scopes; any required data handling must happen separately.
+      if (onPayload) {
+        await onPayload({ payload, shop, topic, webhookId: request.headers.get("X-Shopify-Webhook-Id") });
+      }
+
       return finish(200, "acknowledged");
     } catch {
       return finish(500, "request_failed");

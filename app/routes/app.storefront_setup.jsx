@@ -70,10 +70,15 @@ export default function StorefrontSetupPage() {
           <Metric label="Store themes" value={themes.length} detail={`${liveThemes.length} live theme`} />
         </div>
 
+        <section style={updateNoticeStyle}>
+          <strong>After an app or theme update:</strong> Check that each offer block is still in the correct template, its collection, quantities, and savings still match the active offer, and the intended theme is published. Save and place a test order before promoting the offer.
+        </section>
+
         <section style={quickStartStyle}>
           <SetupStep number="1" title="Choose a theme" detail="Start with a preview or development theme if possible. You can test safely before changing your live store." />
-          <SetupStep number="2" title="Pick your offer type" detail="Use the unified bundle page for fixed price, buy-X-get-Y-free, and percentage offers. Use Quantity offers for a product page." />
+          <SetupStep number="2" title="Pick your offer type" detail="Use the unified bundle page for fixed-price, percentage-off, or Buy X Get Y Free bundles. Use Quantity offers for percentage savings on product pages." />
           <SetupStep number="3" title="Save and test" detail="In Shopify’s editor, add the block, choose its settings, click Save, and test the offer before publishing." />
+          <SetupStep number="4" title="Match the settings" detail="The block collection, products, quantities, and savings must match the active offer created in this app." />
         </section>
 
         <section style={sectionStyle}>
@@ -87,13 +92,25 @@ export default function StorefrontSetupPage() {
         <section style={sectionStyle}>
           <div><div style={eyebrowStyle}>Step 2</div><h3 style={titleStyle}>Choose what you want to show shoppers</h3><p style={copyStyle}>Use the buttons above to open Shopify’s theme editor. There, add the offer block, choose your products and colors, then click Save.</p></div>
           <div style={templateGridStyle}>
-            <TemplateCard name="Unified bundle page" type="For a bundle page" description="Let shoppers choose products from one collection and automatically qualify for fixed price, free-item, or percentage offers." steps={["Create a Page template.", "Add the unified bundle page and choose the collection.", "Configure the enabled offer tiers and save."]} />
-            <TemplateCard name="Quantity offers" type="For a product page" description="Show quantity savings, such as buy 2 and save more, on a product page." steps={["Create a Product template.", "Add Quantity offers to Product information.", "Assign the template to the products you want."]} />
+            <TemplateCard name="Unified bundle page" type="For a bundle page" description="Let shoppers build a bundle from a collection and qualify for fixed-price, percentage-off, or Buy X Get Y Free offers." steps={["Create or open a Page template.", "Add the Unified bundle page app block and choose its collection.", "Set the bundle type, required quantity, and saving to match the active bundle offer.", "Save the template, assign it to a Shopify page, and test that page."]} />
+            <TemplateCard name="Quantity offers" type="For a product page" description="Show percentage quantity savings, such as buy 2 and save more, directly on a product page." steps={["Create or open a Product template.", "Add the Quantity offers app block to Product information.", "Choose the offer product and configure the displayed tiers to match the active quantity offer.", "Save and assign the template to the intended product, then test it."]} />
           </div>
         </section>
 
         <section style={tipStyle}>
           <strong>Step 3 — Save and check:</strong> make sure the products, quantities, and savings in the block match the offer you created in this app. Then add the offer to cart to make sure it works before publishing.
+        </section>
+
+        <section style={sectionStyle}>
+          <div><div style={eyebrowStyle}>Before customers see it</div><h3 style={titleStyle}>Storefront testing checklist</h3><p style={copyStyle}>A visible app block does not guarantee a discount. Shopify applies an automatic saving only when the cart meets the active offer rules.</p></div>
+          <div style={checklistGridStyle}>
+            <CheckItem title="Offer is active" detail="Confirm the selected quantity or bundle offer is active and its schedule has started." />
+            <CheckItem title="Products qualify" detail="Confirm the product is published, in stock, and included in the offer's selected products or collection." />
+            <CheckItem title="Cart meets the rule" detail="Add the exact required quantity or a complete bundle, then check cart or checkout." />
+            <CheckItem title="No competing discount" detail="Test without another automatic discount or code, since Shopify combination rules can change the final result." />
+            <CheckItem title="Correct theme is live" detail="Preview themes are safe for testing; publish the intended theme only after the test is successful." />
+            <CheckItem title="Custom checkout works" detail="If you use custom checkout code, test standard Shopify checkout first, then test the provider integration." />
+          </div>
         </section>
 
         <section style={supportStyle}>
@@ -131,6 +148,10 @@ function SetupStep({ number, title, detail }) {
   return <article style={setupStepStyle}><span style={stepNumberStyle}>{number}</span><div><strong style={{ color: "#0f172a" }}>{title}</strong><p style={{ ...copyStyle, marginTop: "0.25rem", fontSize: "0.84rem" }}>{detail}</p></div></article>;
 }
 
+function CheckItem({ title, detail }) {
+  return <article style={checkItemStyle}><span style={checkMarkStyle}>✓</span><div><strong style={{ color: "#0f172a", fontSize: "0.9rem" }}>{title}</strong><p style={{ ...copyStyle, marginTop: "0.2rem", fontSize: "0.84rem" }}>{detail}</p></div></article>;
+}
+
 function Metric({ label, value, detail }) { return <article style={metricStyle}><span style={{ color: "#64748b", fontSize: "0.84rem", fontWeight: 700 }}>{label}</span><strong style={{ display: "block", fontSize: "1.7rem", marginTop: "0.25rem" }}>{value}</strong><span style={{ color: "#64748b", fontSize: "0.8rem" }}>{detail}</span></article>; }
 
 const pageStyle = { display: "grid", gap: "1rem", maxWidth: "1120px" };
@@ -142,6 +163,7 @@ const titleStyle = { margin: "0.2rem 0 0", fontSize: "1.15rem" };
 const copyStyle = { margin: 0, color: "#475569", lineHeight: 1.5, fontSize: "0.9rem" };
 const metricGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.8rem" };
 const metricStyle = { padding: "1rem", background: "#fff", border: "1px solid #dbe4ea", borderRadius: "0.85rem" };
+const updateNoticeStyle = { padding: "1rem", borderRadius: "0.8rem", border: "1px solid #fde68a", background: "#fffbeb", color: "#713f12", lineHeight: 1.55 };
 const sectionStyle = { display: "grid", gap: "1rem", padding: "1.15rem", background: "#fff", border: "1px solid #dbe4ea", borderRadius: "1rem" };
 const quickStartStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" };
 const setupStepStyle = { display: "flex", gap: "0.7rem", padding: "0.9rem", border: "1px solid #dbe4ea", borderRadius: "0.8rem", background: "#fff" };
@@ -158,6 +180,9 @@ const templateCardStyle = { padding: "1rem", border: "1px solid #dbe4ea", border
 const typeStyle = { padding: "0.2rem 0.5rem", borderRadius: "999px", background: "#dbeafe", color: "#1d4ed8", fontSize: "0.7rem", fontWeight: 800 };
 const stepsStyle = { margin: "0.8rem 0 0", paddingLeft: "1.2rem", display: "grid", gap: "0.45rem", color: "#334155", fontSize: "0.85rem", lineHeight: 1.45 };
 const tipStyle = { padding: "1rem", borderRadius: "0.8rem", background: "#ecfdf5", color: "#065f46", lineHeight: 1.5 };
+const checklistGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "0.75rem" };
+const checkItemStyle = { display: "flex", gap: "0.65rem", alignItems: "flex-start", padding: "0.85rem", border: "1px solid #dbe4ea", borderRadius: "0.75rem", background: "#f8fafc" };
+const checkMarkStyle = { display: "grid", flex: "0 0 auto", placeItems: "center", width: "1.35rem", height: "1.35rem", borderRadius: "50%", background: "#dcfce7", color: "#047857", fontWeight: 900, fontSize: "0.8rem" };
 const editorHintStyle = { margin: 0, padding: "0.65rem 0.75rem", borderRadius: "0.55rem", background: "#f0f9ff", color: "#075985", fontSize: "0.82rem", lineHeight: 1.45 };
 const supportStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", padding: "1.1rem", borderRadius: "0.85rem", border: "1px solid #bfdbfe", background: "#eff6ff" };
 const supportLinkStyle = { display: "inline-flex", alignItems: "center", minHeight: "2.5rem", padding: "0 0.85rem", borderRadius: "0.55rem", background: "#1d4ed8", color: "#fff", fontWeight: 750, fontSize: "0.86rem", textDecoration: "none" };

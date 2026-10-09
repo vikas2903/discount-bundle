@@ -32,3 +32,20 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model AnalyticsOrder {
+  id                   String   @id @default(cuid())
+  shop                 String
+  shopifyOrderId       String
+  createdAt            DateTime
+  updatedAt            DateTime
+  revenue              Float    @default(0)
+  savings              Float    @default(0)
+  currencyCode         String   @default("USD")
+  discountApplications String   @default("[]")
+  sourceName           String?
+  recordedAt           DateTime @updatedAt
+
+  @@unique([shop, shopifyOrderId])
+  @@index([shop, createdAt])
+}

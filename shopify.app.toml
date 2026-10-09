@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "6768c8ee8bcc15436a4881b9250a8860"
-name = "VsApps Bundles & Volume Deals" 
+name = "Bundle & Quantity Discount App"
 application_url = "https://discount-bundle-production.up.railway.app"
 embedded = true
 
@@ -30,6 +30,14 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/create"
+  topics = [ "orders/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/updated"
+  topics = [ "orders/updated" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

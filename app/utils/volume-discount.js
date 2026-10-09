@@ -9,8 +9,27 @@ export const DEFAULT_VOLUME_FUNCTION_HANDLE = "bundle-pack-3-for-999";
 export const DEFAULT_VOLUME_CONFIG = {
   title: "",
   message: "Buy more & save more",
-  status: "ACTIVE",
+  status: "DRAFT",
+  productMode: "all",
   selectedCollectionIds: [],
+  selectedProductIds: [],
+  application: {
+    method: "repeat",
+    maxApplications: 0,
+    priority: "cheapest",
+  },
+  combinations: {
+    productDiscounts: false,
+    orderDiscounts: false,
+    shippingDiscounts: false,
+  },
+  newCustomersOnly: false,
+  storefrontMessages: {
+    productPage: "",
+    cartDrawer: "",
+    cartPage: "",
+    remainingQuantity: "",
+  },
   tiers: [
     {
       minQty: 2,
@@ -59,6 +78,16 @@ export function parseVolumeConfig(value) {
           ? parsed.status
           : fallback.status,
       selectedCollectionIds: normalizeCollectionIds(parsed?.selectedCollectionIds),
+      productMode: normalizeProductMode(
+        parsed?.productMode,
+        parsed?.selectedCollectionIds,
+        parsed?.selectedProductIds,
+      ),
+      selectedProductIds: normalizeProductIds(parsed?.selectedProductIds),
+      application: normalizeApplication(parsed?.application),
+      combinations: normalizeCombinations(parsed?.combinations),
+      newCustomersOnly: Boolean(parsed?.newCustomersOnly),
+      storefrontMessages: normalizeStorefrontMessages(parsed?.storefrontMessages),
       tiers: topLevelTiers,
       mode:
         topLevelTiers.length > 0 || legacyProducts.length === 0
@@ -85,6 +114,16 @@ export function normalizeVolumeConfig(config) {
         ? config.status
         : DEFAULT_VOLUME_CONFIG.status,
     selectedCollectionIds: normalizeCollectionIds(config?.selectedCollectionIds),
+    productMode: normalizeProductMode(
+      config?.productMode,
+      config?.selectedCollectionIds,
+      config?.selectedProductIds,
+    ),
+    selectedProductIds: normalizeProductIds(config?.selectedProductIds),
+    application: normalizeApplication(config?.application),
+    combinations: normalizeCombinations(config?.combinations),
+    newCustomersOnly: Boolean(config?.newCustomersOnly),
+    storefrontMessages: normalizeStorefrontMessages(config?.storefrontMessages),
     tiers: normalizeTiers(config?.tiers, DEFAULT_VOLUME_CONFIG.tiers),
   };
 }
@@ -98,6 +137,27 @@ export function validateVolumeConfig(config, { allowLegacy = false } = {}) {
 
   if (!allowLegacy && (!Array.isArray(config?.tiers) || config.tiers.length === 0)) {
     errors.push("Add at least one volume tier.");
+  }
+
+  if (
+    config?.productMode === "collections" &&
+    (!Array.isArray(config?.selectedCollectionIds) || config.selectedCollectionIds.length === 0)
+  ) {
+    errors.push("Choose at least one collection.");
+  }
+
+  if (
+    config?.productMode === "products" &&
+    (!Array.isArray(config?.selectedProductIds) || config.selectedProductIds.length === 0)
+  ) {
+    errors.push("Choose at least one product.");
+  }
+
+  if (
+    config?.application?.method === "limit" &&
+    Number(config.application.maxApplications) < 1
+  ) {
+    errors.push("Enter a maximum number of discount applications.");
   }
 
   const seenQuantities = new Set();
@@ -137,11 +197,7 @@ export function formatVolumeDiscountInput({
     endsAt: endsAt || null,
     functionHandle: functionHandle || DEFAULT_VOLUME_FUNCTION_HANDLE,
     discountClasses: ["PRODUCT"],
-    combinesWith: {
-      productDiscounts: false,
-      orderDiscounts: false,
-      shippingDiscounts: false,
-    },
+    combinesWith: normalizeCombinations(config.combinations),
     metafields: [
       {
         namespace: VOLUME_METAFIELD_NAMESPACE,
@@ -155,6 +211,12 @@ export function formatVolumeDiscountInput({
         type: "json",
         value: JSON.stringify({
           selectedCollectionIds: normalizeCollectionIds(config.selectedCollectionIds),
+          productMode: normalizeProductMode(
+            config.productMode,
+            config.selectedCollectionIds,
+            config.selectedProductIds,
+          ),
+          selectedProductIds: normalizeProductIds(config.selectedProductIds),
         }),
       },
     ],
@@ -182,6 +244,58 @@ function normalizeCollectionIds(value) {
     .filter((entry, index, entries) => entries.indexOf(entry) === index);
 }
 
+function normalizeProductIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
+}
+
+function normalizeProductMode(value, collectionIds, productIds) {
+  if (value === "collections" || value === "products" || value === "all") {
+    return value;
+  }
+
+  if (normalizeProductIds(productIds).length > 0) {
+    return "products";
+  }
+
+  return normalizeCollectionIds(collectionIds).length > 0 ? "collections" : "all";
+}
+
+function normalizeApplication(value) {
+  return {
+    method:
+      value?.method === "once" || value?.method === "limit" || value?.method === "repeat"
+        ? value.method
+        : DEFAULT_VOLUME_CONFIG.application.method,
+    maxApplications: toNonNegativeInteger(value?.maxApplications, 0),
+    priority:
+      value?.priority === "most_expensive" ? "most_expensive" : "cheapest",
+  };
+}
+
+function normalizeCombinations(value) {
+  return {
+    productDiscounts: Boolean(value?.productDiscounts),
+    orderDiscounts: Boolean(value?.orderDiscounts),
+    shippingDiscounts: Boolean(value?.shippingDiscounts),
+  };
+}
+
+function normalizeStorefrontMessages(value) {
+  return {
+    productPage: String(value?.productPage || "").trim(),
+    cartDrawer: String(value?.cartDrawer || "").trim(),
+    cartPage: String(value?.cartPage || "").trim(),
+    remainingQuantity: String(value?.remainingQuantity || "").trim(),
+  };
+}
+
 function normalizeTiers(value, fallback) {
   const source = Array.isArray(value) ? value : fallback;
 
@@ -207,6 +321,14 @@ function toPositiveNumber(value, fallback) {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) && numberValue > 0
+    ? numberValue
+    : fallback;
+}
+
+function toNonNegativeInteger(value, fallback) {
+  const numberValue = Number(value);
+
+  return Number.isInteger(numberValue) && numberValue >= 0
     ? numberValue
     : fallback;
 }

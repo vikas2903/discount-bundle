@@ -90,3 +90,19 @@ test("non-POST actions return 405", async () => {
   assert.equal(response.status, 405);
   assert.equal(response.headers.get("Allow"), "POST");
 });
+
+test("a verified order webhook delegates only its parsed payload to the analytics handler", async () => {
+  const received = [];
+  const { action } = fixture("orders/create", {
+    onPayload: (context) => received.push(context),
+  });
+  const body = JSON.stringify({ id: 123, current_total_price: "499.00" });
+
+  assert.equal((await action({ request: request("orders/create", { body }) })).status, 200);
+  assert.deepEqual(received, [{
+    topic: "orders/create",
+    shop,
+    webhookId: "test-delivery-id",
+    payload: { id: 123, current_total_price: "499.00" },
+  }]);
+});

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useNavigate, useOutlet } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { checkSubscription } from "../utils/billing.server";
@@ -8,6 +8,7 @@ import {
   createVolumeDiscount,
   deleteVolumeDiscount,
   getVolumeCollections,
+  getVolumeProducts,
   listVolumeDiscounts,
   resolveVolumeFunctionHandle,
   toggleVolumeDiscountStatus,
@@ -22,8 +23,9 @@ import {
 
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
-  const [collectionsResult, discountsResult] = await Promise.allSettled([
+  const [collectionsResult, productsResult, discountsResult] = await Promise.allSettled([
     getVolumeCollections(admin),
+    getVolumeProducts(admin),
     listVolumeDiscounts(admin),
   ]);
 
@@ -32,12 +34,17 @@ export const loader = async ({ request }) => {
       collectionsResult.status === "fulfilled"
         ? collectionsResult.value.collections
         : [],
+    products:
+      productsResult.status === "fulfilled" ? productsResult.value.products : [],
     discounts:
       discountsResult.status === "fulfilled" ? discountsResult.value.discounts : [],
     loadError: [
       ...(collectionsResult.status === "rejected"
         ? [toErrorMessage(collectionsResult.reason)]
         : collectionsResult.value.graphqlErrors.map(({ message }) => message)),
+      ...(productsResult.status === "rejected"
+        ? [toErrorMessage(productsResult.reason)]
+        : productsResult.value.graphqlErrors.map(({ message }) => message)),
       ...(discountsResult.status === "rejected"
         ? [toErrorMessage(discountsResult.reason)]
         : discountsResult.value.graphqlErrors.map(({ message }) => message)),
@@ -121,10 +128,7 @@ export const action = async ({ request }) => {
       return false;
     }
 
-    return hasCollectionOverlap(
-      config.selectedCollectionIds,
-      discount.config.selectedCollectionIds || [],
-    );
+    return hasTargetOverlap(config, discount.config);
   });
 
   if (validationErrors.length > 0 || overlappingDiscounts.length > 0) {
@@ -191,10 +195,21 @@ const INITIAL_FORM = {
 };
 
 export default function VolumeDiscountsPage() {
+  const outlet = useOutlet();
+
+  if (outlet) {
+    return outlet;
+  }
+
+  return <VolumeDiscountListPage />;
+}
+
+function VolumeDiscountListPage() {
   const formFetcher = useFetcher();
   const actionFetcher = useFetcher();
   const shopify = useAppBridge();
-  const { collections, discounts, loadError } = useLoaderData();
+  const navigate = useNavigate();
+  const { collections, products, discounts, loadError } = useLoaderData();
   const [form, setForm] = useState(INITIAL_FORM);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
@@ -223,30 +238,21 @@ export default function VolumeDiscountsPage() {
     [discounts, editingDiscountId],
   );
   const overlapWarnings = useMemo(() => {
-    const currentCollectionIds = form.selectedCollectionIds || [];
-
     return discounts
       .filter((discount) => discount.discountId !== editingDiscountId)
       .filter((discount) => discount.config.mode !== "legacy-product")
       .filter((discount) => discount.status === "ACTIVE")
-      .filter((discount) =>
-        hasCollectionOverlap(currentCollectionIds, discount.config.selectedCollectionIds || []),
-      )
+      .filter((discount) => hasTargetOverlap(form, discount.config))
       .map((discount) => {
-        const collectionTitles =
-          discount.config.selectedCollectionIds.length > 0
-            ? discount.config.selectedCollectionIds
-                .map((collectionId) => collectionTitleMap.get(collectionId) || collectionId)
-                .join(", ")
-            : "All products";
+        const targets = getTargetSummary(discount.config, collectionTitleMap);
 
         return {
           discountId: discount.discountId,
           title: discount.title,
-          collections: collectionTitles,
+          targets,
         };
       });
-  }, [collectionTitleMap, discounts, editingDiscountId, form.selectedCollectionIds]);
+  }, [collectionTitleMap, discounts, editingDiscountId, form]);
   const filteredDiscounts = useMemo(() => {
     if (activeTab === "active") {
       return discounts.filter(
@@ -324,22 +330,7 @@ export default function VolumeDiscountsPage() {
       return;
     }
 
-    setShowForm(true);
-    setEditingDiscountId(discount.discountId);
-    setEditingSchedule({
-      startsAt: discount.startsAt || "",
-      endsAt: discount.endsAt || "",
-    });
-    setForm({
-      title: discount.config.title || discount.title,
-      message: discount.config.message || DEFAULT_VOLUME_CONFIG.message,
-      status: discount.config.status || "ACTIVE",
-      selectedCollectionIds: [...(discount.config.selectedCollectionIds || [])],
-      tiers:
-        discount.config.tiers.length > 0
-          ? discount.config.tiers.map((tier) => ({ ...tier }))
-          : [...DEFAULT_VOLUME_CONFIG.tiers],
-    });
+    navigate(`edit/${encodeURIComponent(discount.discountId)}`);
   };
 
   const cancelEditing = () => {
@@ -351,7 +342,7 @@ export default function VolumeDiscountsPage() {
 
   return (
     <s-page>
-      <div style={{ display: "grid", gap: "1.5rem" }}>
+      <div style={{ ...fullWidthStyle, display: "grid", gap: "1.5rem" }}>
         <div style={heroStyle}>
           <div style={{ display: "grid", gap: "0.5rem", maxWidth: "45rem" }}>
             <div style={eyebrowStyle}>Automatic discounts</div>
@@ -359,8 +350,8 @@ export default function VolumeDiscountsPage() {
               Quantity-based offers
             </h1>
             <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
-              Reward shoppers for buying more with clear quantity tiers and targeted collections.
-              Shopify applies qualifying offers automatically, with no discount code required.
+              Reward shoppers for buying more with quantity tiers. Target all products,
+              selected collections, or selected products—no discount code is needed.
             </p>
             <div style={{ display: "flex", gap: "0.55rem", flexWrap: "wrap", marginTop: "0.2rem" }}>
               <span style={metricPillStyle}>{discounts.length} total offers</span>
@@ -371,12 +362,7 @@ export default function VolumeDiscountsPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setForm(INITIAL_FORM);
-              setEditingDiscountId("");
-              setEditingSchedule({ startsAt: "", endsAt: "" });
-              setShowForm(true);
-            }}
+            onClick={() => navigate("new")}
             style={{
               border: "1px solid #2b2b2b",
               background: "#333333",
@@ -390,6 +376,24 @@ export default function VolumeDiscountsPage() {
           >
             Create quantity offer
           </button>
+        </div>
+
+        <div style={howItWorksStyle}>
+          <div style={howItWorksIntroStyle}>
+            <strong>How a quantity offer works</strong>
+            <span>It applies automatically only when all of these rules are met.</span>
+          </div>
+          {[
+            ["1", "The offer is active", "New offers start inactive. Use Activate when you are ready."],
+            ["2", "The item is targeted", "It must be in your selected products or collections, unless you chose all products."],
+            ["3", "The quantity qualifies", "The shopper must buy at least the quantity in one of your saving tiers."],
+            ["4", "Other rules allow it", "Schedule, limits, new-customer setting, and discount combinations are checked."],
+          ].map(([number, title, detail]) => (
+            <div key={number} style={howItWorksStepStyle}>
+              <span style={howItWorksNumberStyle}>{number}</span>
+              <div><strong>{title}</strong><span>{detail}</span></div>
+            </div>
+          ))}
         </div>
 
         {loadError ? (
@@ -411,7 +415,7 @@ export default function VolumeDiscountsPage() {
             <div style={{ display: "grid", gap: "0.35rem", marginTop: "0.6rem" }}>
               {overlapWarnings.map((warning) => (
                 <s-paragraph key={warning.discountId}>
-                  {warning.title} - {warning.collections}
+                  {warning.title} - {warning.targets}
                 </s-paragraph>
               ))}
             </div>
@@ -472,9 +476,6 @@ export default function VolumeDiscountsPage() {
                     const isWorkingOnThisDiscount =
                       actionFetcher.state !== "idle" &&
                       targetedDiscountId === discount.discountId;
-                    const collectionTitles = discount.config.selectedCollectionIds.map(
-                      (collectionId) => collectionTitleMap.get(collectionId) || collectionId,
-                    );
                     const sortedTiers =
                       discount.config.mode === "legacy-product"
                         ? []
@@ -483,10 +484,9 @@ export default function VolumeDiscountsPage() {
                           );
                     const leadTier = sortedTiers[0];
                     const discountLabel = leadTier
-                      ? `${leadTier.minQty} items -> ${leadTier.discountValue}% off`
+                      ? `${leadTier.minQty} items -> ${leadTier.discountValue}${leadTier.discountType === "fixed" ? " off each" : "% off"}`
                       : "Legacy product rules";
-                    const typeLabel =
-                      collectionTitles.length > 0 ? "Collection-based" : "Store-wide";
+                    const typeLabel = getTargetTypeLabel(discount.config);
 
                     return (
                       <tr key={discount.discountId}>
@@ -609,6 +609,7 @@ export default function VolumeDiscountsPage() {
               form={form}
               setForm={setForm}
               collections={collections}
+              products={products}
               isEditing={Boolean(editingDiscount)}
               editingDiscountId={editingDiscountId}
               editingSchedule={editingSchedule}
@@ -646,15 +647,58 @@ function toErrorMessage(error) {
   return String(error);
 }
 
-function hasCollectionOverlap(leftCollectionIds, rightCollectionIds) {
-  const left = Array.isArray(leftCollectionIds) ? leftCollectionIds : [];
-  const right = Array.isArray(rightCollectionIds) ? rightCollectionIds : [];
+function hasTargetOverlap(leftConfig, rightConfig) {
+  const leftMode = getProductMode(leftConfig);
+  const rightMode = getProductMode(rightConfig);
 
-  if (left.length === 0 || right.length === 0) {
+  if (leftMode === "all" || rightMode === "all") {
     return true;
   }
 
-  return left.some((collectionId) => right.includes(collectionId));
+  if (leftMode !== rightMode) {
+    // A selected product can belong to a selected collection. Without a full
+    // product-to-collection lookup, treat the mixed scope as potentially overlapping.
+    return true;
+  }
+
+  const key = leftMode === "products" ? "selectedProductIds" : "selectedCollectionIds";
+  const left = Array.isArray(leftConfig?.[key]) ? leftConfig[key] : [];
+  const right = Array.isArray(rightConfig?.[key]) ? rightConfig[key] : [];
+
+  return left.some((id) => right.includes(id));
+}
+
+function getProductMode(config) {
+  if (config?.productMode === "collections" || config?.productMode === "products") {
+    return config.productMode;
+  }
+
+  return Array.isArray(config?.selectedCollectionIds) && config.selectedCollectionIds.length > 0
+    ? "collections"
+    : "all";
+}
+
+function getTargetTypeLabel(config) {
+  const mode = getProductMode(config);
+
+  if (mode === "collections") return "Selected collections";
+  if (mode === "products") return "Selected products";
+  return "All products";
+}
+
+function getTargetSummary(config, collectionTitleMap) {
+  const mode = getProductMode(config);
+
+  if (mode === "all") return "All products";
+  if (mode === "products") {
+    const count = config?.selectedProductIds?.length || 0;
+    return `${count} selected product${count === 1 ? "" : "s"}`;
+  }
+
+  const collectionIds = config?.selectedCollectionIds || [];
+  return collectionIds
+    .map((collectionId) => collectionTitleMap.get(collectionId) || collectionId)
+    .join(", ");
 }
 
 const panelStyle = {
@@ -663,6 +707,14 @@ const panelStyle = {
   overflow: "hidden",
   background: "#ffffff",
   boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
+};
+
+const fullWidthStyle = {
+  width: "calc(100vw - 2rem)",
+  maxWidth: "none",
+  marginLeft: "calc(50% - 50vw + 1rem)",
+  marginRight: "calc(50% - 50vw + 1rem)",
+  boxSizing: "border-box",
 };
 
 const heroStyle = {
@@ -675,6 +727,48 @@ const heroStyle = {
   border: "1px solid #dbe4f0",
   borderRadius: "1rem",
   background: "linear-gradient(135deg, #f8fafc 0%, #eef6f1 100%)",
+};
+
+const howItWorksStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+  gap: "0.75rem",
+  padding: "1rem",
+  border: "1px solid #dbe4f0",
+  borderRadius: "1rem",
+  background: "#ffffff",
+};
+
+const howItWorksIntroStyle = {
+  display: "grid",
+  alignContent: "center",
+  gap: "0.35rem",
+  color: "#334155",
+  lineHeight: 1.45,
+};
+
+const howItWorksStepStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.6rem",
+  padding: "0.75rem",
+  borderRadius: "0.7rem",
+  background: "#f8fafc",
+  color: "#475569",
+  fontSize: "0.88rem",
+  lineHeight: 1.45,
+};
+
+const howItWorksNumberStyle = {
+  display: "grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+  width: "1.55rem",
+  height: "1.55rem",
+  borderRadius: "50%",
+  background: "#ccfbf1",
+  color: "#0f766e",
+  fontWeight: 800,
 };
 
 const eyebrowStyle = {

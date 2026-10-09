@@ -9,6 +9,47 @@ import {
 
 export { getBundleCollections as getVolumeCollections };
 
+export async function getVolumeProducts(admin) {
+  const products = [];
+  const graphqlErrors = [];
+  let hasNextPage = true;
+  let cursor = null;
+
+  while (hasNextPage) {
+    const response = await admin.graphql(
+      `#graphql
+        query VolumeProducts($after: String) {
+          products(first: 250, after: $after, sortKey: TITLE) {
+            edges {
+              cursor
+              node {
+                id
+                title
+              }
+            }
+            pageInfo {
+              hasNextPage
+            }
+          }
+        }`,
+      { variables: { after: cursor } },
+    );
+    const responseJson = await response.json();
+    const edges = responseJson.data?.products?.edges || [];
+
+    products.push(...edges.map(({ node }) => node));
+    graphqlErrors.push(...(responseJson.errors || []));
+    hasNextPage = Boolean(responseJson.data?.products?.pageInfo?.hasNextPage);
+    cursor = edges.length > 0 ? edges[edges.length - 1].cursor : null;
+
+    if (!cursor) {
+      hasNextPage = false;
+    }
+  }
+
+  return { products, graphqlErrors };
+}
+
 export async function listVolumeDiscounts(admin) {
   const response = await admin.graphql(
     `#graphql
@@ -107,7 +148,7 @@ export async function createVolumeDiscount(
   const responseJson = await response.json();
   const payload = responseJson.data?.discountAutomaticAppCreate;
 
-  return {
+  const result = {
     ok:
       (payload?.userErrors || []).length === 0 &&
       Boolean(payload?.automaticAppDiscount),
@@ -115,6 +156,32 @@ export async function createVolumeDiscount(
     userErrors: payload?.userErrors || [],
     graphqlErrors: responseJson.errors || [],
   };
+
+  // Shopify creates automatic app discounts as active. Quantity offers default
+  // to DRAFT in this app, so deactivate them immediately after creation.
+  if (result.ok && config.status !== "ACTIVE") {
+    const deactivation = await toggleVolumeDiscountStatus(admin, {
+      id: result.discount.discountId,
+      nextStatus: "disable",
+    });
+
+    if (!deactivation.ok) {
+      return {
+        ...result,
+        ok: false,
+        userErrors: deactivation.userErrors,
+        graphqlErrors: deactivation.graphqlErrors,
+      };
+    }
+
+    return {
+      ...result,
+      discount: deactivation.discount || result.discount,
+      nextStatus: "disable",
+    };
+  }
+
+  return result;
 }
 
 export async function updateVolumeDiscount(

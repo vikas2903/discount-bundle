@@ -7,10 +7,12 @@ export default function VolumeDiscountForm({
   form,
   setForm,
   collections,
+  products,
   isEditing,
   editingDiscountId,
   editingSchedule,
   onCancelEdit,
+  actionPath,
 }) {
   const isSaving = fetcher.state !== "idle";
   const shopify = useAppBridge();
@@ -19,6 +21,8 @@ export default function VolumeDiscountForm({
     toDateTimeInput(editingSchedule?.endsAt),
   ]);
   const selectedCollectionIds = form.selectedCollectionIds;
+  const selectedProductIds = form.selectedProductIds;
+  const productMode = form.productMode || "all";
   const selectedCollectionTitles = useMemo(() => {
     const selectedSet = new Set(selectedCollectionIds);
 
@@ -26,6 +30,11 @@ export default function VolumeDiscountForm({
       .filter((collection) => selectedSet.has(collection.id))
       .map((collection) => collection.title);
   }, [collections, selectedCollectionIds]);
+  const selectedProductTitles = useMemo(() => {
+    const productsById = new Map(products.map((product) => [product.id, product.title]));
+
+    return selectedProductIds.map((id) => productsById.get(id) || id);
+  }, [products, selectedProductIds]);
   const scheduleSummary = getScheduleSummary(scheduleRange);
 
   const updateField = (field, value) => {
@@ -33,6 +42,14 @@ export default function VolumeDiscountForm({
       ...currentForm,
       [field]: value,
     }));
+  };
+
+  const updateApplication = (field, value) => {
+    updateField("application", { ...form.application, [field]: value });
+  };
+
+  const updateCombinations = (field, value) => {
+    updateField("combinations", { ...form.combinations, [field]: value });
   };
 
   const addTier = () => {
@@ -83,8 +100,21 @@ export default function VolumeDiscountForm({
     }
   };
 
+  const openProductPicker = async () => {
+    const selected = await shopify.resourcePicker({
+      type: "product",
+      action: selectedProductIds.length > 0 ? "select" : "add",
+      multiple: true,
+      selectionIds: selectedProductIds.map((id) => ({ id })),
+    });
+
+    if (selected) {
+      updateField("selectedProductIds", selected.map((product) => product.id));
+    }
+  };
+
   return (
-    <fetcher.Form method="post">
+    <fetcher.Form method="post" action={actionPath}>
       <input type="hidden" name="intent" value={isEditing ? "update" : "create"} />
       <input type="hidden" name="discountId" value={editingDiscountId || ""} />
       <input
@@ -104,7 +134,7 @@ export default function VolumeDiscountForm({
           <s-stack direction="block" gap="tight">
             <s-heading>How this offer works</s-heading>
             <s-paragraph>1. Name the offer and add an optional message for shoppers.</s-paragraph>
-            <s-paragraph>2. Choose products, or leave this blank to include your whole store.</s-paragraph>
+            <s-paragraph>2. Target all products, selected collections, or individual products.</s-paragraph>
             <s-paragraph>3. Set savings for different quantities, such as buy 2 and save 5%, or buy 3 and save 15%.</s-paragraph>
             <s-paragraph>4. Save the offer. Shopify applies it automatically when a cart qualifies—shoppers never need a discount code.</s-paragraph>
           </s-stack>
@@ -122,6 +152,17 @@ export default function VolumeDiscountForm({
           value={form.message}
           onInput={(event) => updateField("message", getEventValue(event))}
         />
+
+        {!isEditing ? (
+          <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+            <s-stack direction="block" gap="tight">
+              <s-heading>Offer status</s-heading>
+              <s-paragraph>
+                New quantity offers are saved as inactive. Activate the offer from the quantity-offers list when you are ready for shoppers to use it.
+              </s-paragraph>
+            </s-stack>
+          </s-box>
+        ) : null}
 
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
           <s-stack direction="block" gap="tight">
@@ -207,7 +248,7 @@ export default function VolumeDiscountForm({
                     />
 
                     <s-text-field
-                      label="Saving percentage"
+                      label="Saving value"
                       type="number"
                       min="0"
                       max="100"
@@ -220,6 +261,19 @@ export default function VolumeDiscountForm({
                         )
                       }
                     />
+                    <label style={{ display: "grid", gap: "0.35rem", fontWeight: 600 }}>
+                      Discount type
+                      <select
+                        value={tier.discountType}
+                        onChange={(event) =>
+                          updateTier(index, "discountType", event.target.value)
+                        }
+                        style={selectStyle}
+                      >
+                        <option value="percentage">Percentage off</option>
+                        <option value="fixed">Fixed amount off each item</option>
+                      </select>
+                    </label>
                   </s-stack>
                 </s-stack>
               </s-box>
@@ -233,28 +287,145 @@ export default function VolumeDiscountForm({
 
         <s-box padding="base" borderWidth="base" borderRadius="base">
           <s-stack direction="block" gap="base">
-            <s-heading>Choose eligible products</s-heading>
+            <s-heading>Discount application limits</s-heading>
             <s-paragraph>
-              Leave this blank to include every product in your store. Choose collections to limit the offer to certain products.
+              Control how many eligible cart lines can receive this volume discount.
+            </s-paragraph>
+            <div style={targetingOptionsStyle}>
+              {[
+                ["once", "Apply once per order", "Discount one qualifying product line."],
+                ["repeat", "Apply to every qualifying line", "Discount all qualifying product lines."],
+                ["limit", "Limit applications", "Set a maximum number of qualifying lines."],
+              ].map(([value, label, detail]) => (
+                <label key={value} htmlFor={`volume-application-${value}`} aria-label={label} style={{ ...targetOptionStyle, ...(form.application.method === value ? selectedTargetOptionStyle : {}) }}>
+                  <input id={`volume-application-${value}`} type="radio" name="volume-application" checked={form.application.method === value} onChange={() => updateApplication("method", value)} />
+                  <span style={{ display: "grid", gap: "0.2rem" }}><strong>{label}</strong><span style={{ color: "#64748b", fontSize: "0.88rem" }}>{detail}</span></span>
+                </label>
+              ))}
+            </div>
+            {form.application.method === "limit" ? (
+              <s-text-field
+                label="Maximum applications per order"
+                type="number"
+                min="1"
+                value={String(form.application.maxApplications || "")}
+                onInput={(event) => updateApplication("maxApplications", Number(getEventValue(event)))}
+              />
+            ) : null}
+          </s-stack>
+        </s-box>
+
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-heading>Item priority</s-heading>
+            <s-paragraph>When applications are limited, choose which qualifying product lines receive the saving first.</s-paragraph>
+            <label style={{ display: "grid", gap: "0.35rem", fontWeight: 600 }}>
+              Prioritize items by price
+              <select value={form.application.priority} onChange={(event) => updateApplication("priority", event.target.value)} style={selectStyle}>
+                <option value="cheapest">Cheapest eligible items first</option>
+                <option value="most_expensive">Most expensive eligible items first</option>
+              </select>
+            </label>
+          </s-stack>
+        </s-box>
+
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-heading>Discount combinations</s-heading>
+            <s-paragraph>Choose which other Shopify discount classes can combine with this offer.</s-paragraph>
+            <div style={checkboxGridStyle}>
+              {[["productDiscounts", "Product discounts"], ["orderDiscounts", "Order discounts"], ["shippingDiscounts", "Shipping discounts"]].map(([key, label]) => (
+                <label key={key} style={checkboxOptionStyle}>
+                  <input type="checkbox" checked={form.combinations[key]} onChange={(event) => updateCombinations(key, event.target.checked)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </s-stack>
+        </s-box>
+
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-heading>Target this offer</s-heading>
+            <s-paragraph>
+              Choose exactly which products can receive this quantity saving. Existing selections are kept when you switch between targeting options.
             </s-paragraph>
 
-            <div style={collectionSelectionStyle}>
-              <div style={{ display: "grid", gap: "0.3rem", minWidth: 0 }}>
-                <strong>
-                  {selectedCollectionTitles.length > 0
-                    ? `${selectedCollectionTitles.length} collection${selectedCollectionTitles.length === 1 ? "" : "s"} selected`
-                    : "All products"}
-                </strong>
-                <span style={{ color: "#64748b", overflowWrap: "anywhere" }}>
-                  {selectedCollectionTitles.length > 0
-                    ? selectedCollectionTitles.join(", ")
-                    : "Every product in your store is eligible."}
-                </span>
-              </div>
-              <s-button type="button" variant="secondary" onClick={openCollectionPicker}>
-                {selectedCollectionTitles.length > 0 ? "Edit collections" : "Select collections"}
-              </s-button>
+            <div style={targetingOptionsStyle}>
+              {[
+                ["all", "All products", "Every product in your store can qualify."],
+                ["collections", "Selected collections", "Limit the offer to products in chosen collections."],
+                ["products", "Selected products", "Limit the offer to specific products."],
+              ].map(([value, label, detail]) => (
+                <label
+                  key={value}
+                  htmlFor={`volume-product-targeting-${value}`}
+                  aria-label={label}
+                  style={{
+                    ...targetOptionStyle,
+                    ...(productMode === value ? selectedTargetOptionStyle : {}),
+                  }}
+                >
+                  <input
+                    id={`volume-product-targeting-${value}`}
+                    type="radio"
+                    name="volume-product-targeting"
+                    value={value}
+                    checked={productMode === value}
+                    onChange={() => updateField("productMode", value)}
+                  />
+                  <span style={{ display: "grid", gap: "0.2rem" }}>
+                    <strong>{label}</strong>
+                    <span style={{ color: "#64748b", fontSize: "0.88rem" }}>{detail}</span>
+                  </span>
+                </label>
+              ))}
             </div>
+
+            {productMode === "collections" ? (
+              <TargetPicker
+                label={
+                  selectedCollectionTitles.length > 0
+                    ? `${selectedCollectionTitles.length} collection${selectedCollectionTitles.length === 1 ? "" : "s"} selected`
+                    : "No collections selected"
+                }
+                description={
+                  selectedCollectionTitles.length > 0
+                    ? selectedCollectionTitles.join(", ")
+                    : "Choose one or more collections for this offer."
+                }
+                buttonLabel={selectedCollectionTitles.length > 0 ? "Edit collections" : "Select collections"}
+                onClick={openCollectionPicker}
+              />
+            ) : null}
+
+            {productMode === "products" ? (
+              <TargetPicker
+                label={
+                  selectedProductTitles.length > 0
+                    ? `${selectedProductTitles.length} product${selectedProductTitles.length === 1 ? "" : "s"} selected`
+                    : "No products selected"
+                }
+                description={
+                  selectedProductTitles.length > 0
+                    ? selectedProductTitles.join(", ")
+                    : "Choose one or more products for this offer."
+                }
+                buttonLabel={selectedProductTitles.length > 0 ? "Edit products" : "Select products"}
+                onClick={openProductPicker}
+              />
+            ) : null}
+          </s-stack>
+        </s-box>
+
+        <s-box padding="base" borderWidth="base" borderRadius="base">
+          <s-stack direction="block" gap="base">
+            <s-heading>Eligible products &amp; customers</s-heading>
+            <s-paragraph>Product targeting is set above. This offer is available to all customers unless you limit it to new customers.</s-paragraph>
+            <label aria-label="New customers only" style={checkboxOptionStyle}>
+              <input type="checkbox" checked={form.newCustomersOnly} onChange={(event) => updateField("newCustomersOnly", event.target.checked)} />
+              <span><strong>New customers only</strong><br /><span style={{ color: "#64748b", fontSize: "0.88rem" }}>Apply only when Shopify identifies the customer as having no previous orders.</span></span>
+            </label>
           </s-stack>
         </s-box>
 
@@ -270,6 +441,20 @@ export default function VolumeDiscountForm({
         </s-stack>
       </s-stack>
     </fetcher.Form>
+  );
+}
+
+function TargetPicker({ label, description, buttonLabel, onClick }) {
+  return (
+    <div style={collectionSelectionStyle}>
+      <div style={{ display: "grid", gap: "0.3rem", minWidth: 0 }}>
+        <strong>{label}</strong>
+        <span style={{ color: "#64748b", overflowWrap: "anywhere" }}>{description}</span>
+      </div>
+      <s-button type="button" variant="secondary" onClick={onClick}>
+        {buttonLabel}
+      </s-button>
+    </div>
   );
 }
 
@@ -372,5 +557,54 @@ const collectionSelectionStyle = {
   padding: "0.85rem",
   border: "1px solid #dbe4f0",
   borderRadius: "0.75rem",
+  background: "#f8fafc",
+};
+
+const targetingOptionsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+  gap: "0.65rem",
+};
+
+const targetOptionStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.55rem",
+  padding: "0.8rem",
+  border: "1px solid #dbe4f0",
+  borderRadius: "0.7rem",
+  background: "#ffffff",
+  cursor: "pointer",
+};
+
+const selectedTargetOptionStyle = {
+  borderColor: "#0f766e",
+  background: "#f0fdfa",
+  boxShadow: "inset 0 0 0 1px #0f766e",
+};
+
+const selectStyle = {
+  width: "100%",
+  minHeight: "2.5rem",
+  padding: "0.5rem 0.65rem",
+  border: "1px solid #8a8a8a",
+  borderRadius: "0.5rem",
+  background: "#ffffff",
+  font: "inherit",
+};
+
+const checkboxGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+  gap: "0.65rem",
+};
+
+const checkboxOptionStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.55rem",
+  padding: "0.75rem",
+  border: "1px solid #dbe4f0",
+  borderRadius: "0.65rem",
   background: "#f8fafc",
 };
