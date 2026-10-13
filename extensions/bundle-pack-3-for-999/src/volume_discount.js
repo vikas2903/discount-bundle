@@ -28,6 +28,11 @@ export function runVolumeDiscount(input, configValue) {
       continue;
     }
 
+    if (config.productMode === 'collections') {
+      qualifyingLines.push({line});
+      continue;
+    }
+
     const matchedTier = [...config.tiers]
       .sort((left, right) => right.minQty - left.minQty)
       .find((tier) => Number(line.quantity || 0) >= tier.minQty);
@@ -41,6 +46,10 @@ export function runVolumeDiscount(input, configValue) {
 
   if (config.newCustomersOnly && input.cart.buyerIdentity?.customer?.numberOfOrders !== 0) {
     return {operations: []};
+  }
+
+  if (config.productMode === 'collections') {
+    return runCollectionVolumeDiscount(qualifyingLines, config);
   }
 
   const direction = config.application.priority === 'most_expensive' ? -1 : 1;
@@ -93,6 +102,56 @@ export function runVolumeDiscount(input, configValue) {
         },
       },
     ],
+  };
+}
+
+function runCollectionVolumeDiscount(qualifyingLines, config) {
+  const totalQuantity = qualifyingLines.reduce(
+    (total, {line}) => total + Number(line.quantity || 0),
+    0,
+  );
+  const matchedTier = [...config.tiers]
+    .sort((left, right) => right.minQty - left.minQty)
+    .find((tier) => totalQuantity >= tier.minQty);
+
+  if (!matchedTier) {
+    return {operations: []};
+  }
+
+  const targetLimit = config.application.method === 'once'
+    ? matchedTier.minQty
+    : config.application.method === 'limit'
+      ? matchedTier.minQty * config.application.maxApplications
+      : totalQuantity;
+  let remaining = Math.min(totalQuantity, targetLimit);
+  const direction = config.application.priority === 'most_expensive' ? -1 : 1;
+  const targets = [...qualifyingLines]
+    .sort((left, right) => direction * (linePrice(left.line) - linePrice(right.line)))
+    .flatMap(({line}) => {
+      const quantity = Math.min(remaining, Number(line.quantity || 0));
+      remaining -= quantity;
+      return quantity > 0 ? [{cartLine: {id: line.id, quantity}}] : [];
+    });
+
+  if (!targets.length) {
+    return {operations: []};
+  }
+
+  const value = matchedTier.discountType === 'fixed'
+    ? {fixedAmount: {amount: matchedTier.discountValue.toFixed(2), appliesToEachItem: true}}
+    : {percentage: {value: matchedTier.discountValue.toFixed(2)}};
+
+  return {
+    operations: [{
+      productDiscountsAdd: {
+        candidates: [{
+          message: resolveVolumeMessage(config.message, matchedTier.label),
+          targets,
+          value,
+        }],
+        selectionStrategy: ProductDiscountSelectionStrategy.All,
+      },
+    }],
   };
 }
 

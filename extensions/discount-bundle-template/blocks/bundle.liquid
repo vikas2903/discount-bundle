@@ -19,6 +19,7 @@
     {
       "maxProducts": {{ bundle_total_quantity | json }},
       "offerProducts": {{ bundle_total_quantity | json }},
+      "allowAdditionalProducts": {{ block.settings.allow_additional_products | json }},
       "requiredProducts": {{ bundle_required_quantity | json }},
       "freeProducts": {{ bundle_free_quantity | json }},
       "discountType": {{ block.settings.discount_type | json }},
@@ -231,7 +232,6 @@
 .vs-full-details { display:block; text-align:center; text-decoration:none; color:#111; background:#f8f8f8; border-radius:5px; padding:10px; margin-top:6px; font-size:10px; }
 .vs-modal-error { color:#b02b1b; font-size:11px; margin:6px 0; }
 .vs-policy-title { font-size:14px; margin:0 0 12px; }
-/* Collapsed pack footer; selected product tiles expand above the offer strip. */
 .vs-bottom-bar { --vs-ink:#1b1b1b; --vs-teal:#008b78; --vs-line:#e2e3e7; position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e6e6e6; border-radius:7px 7px 0 0; box-shadow:0 -3px 18px #00000010; padding:12px 20px 14px; padding-bottom:max(14px,env(safe-area-inset-bottom)); color:var(--vs-ink); font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; z-index:2147482000; isolation:isolate; pointer-events:auto; -webkit-transform:translateZ(0); transform:translateZ(0); }
 .vs-bottom-bar *, .vs-bottom-bar *::before, .vs-bottom-bar *::after { box-sizing:border-box; }
 .vs-bottom-bar[hidden] { display:none !important; }
@@ -319,7 +319,6 @@
 <script>
 (() => {
   'use strict';
-  // A single definition also handles sections reloaded by the theme editor.
   if (window.VSBundleSection) {
     window.VSBundleSection.mount(document);
     return;
@@ -337,6 +336,7 @@
       this.config = JSON.parse(section.querySelector('[data-bundle-config]').textContent);
       this.maxProducts = Math.max(1, Number(this.config.maxProducts) || 2);
       this.offerProducts = Math.min(this.maxProducts, Math.max(1, Number(this.config.offerProducts) || 2));
+      this.allowAdditionalProducts = this.config.allowAdditionalProducts === true;
       this.requiredProducts = Math.min(this.offerProducts, Math.max(1, Number(this.config.requiredProducts) || this.offerProducts));
       this.freeProducts = Math.max(0, Number(this.config.freeProducts) || 0);
       this.discountType = ['fixed_price', 'percentage', 'free'].includes(this.config.discountType) ? this.config.discountType : 'fixed_price';
@@ -347,8 +347,6 @@
       this.selected = [];
       this.busy = false;
       this.packExpanded = false;
-      // `AbortSignal` in addEventListener is not available on older iOS Safari.
-      // Store listeners ourselves so the bundle still initializes there.
       this.events = typeof AbortController === 'function' ? new AbortController() : null;
       this.listeners = [];
       this.grid = section.querySelector('[data-grid]');
@@ -375,9 +373,6 @@
       this.portalModal();
       this.appendProducts(JSON.parse(section.querySelector('[data-bundle-products]').textContent));
       if (this.attopHandle) this.pinProductFromURL();
-      // Capture before theme card handlers. A number of themes stop bubbling
-      // clicks from product cards, which otherwise prevents Quick View and
-      // option buttons from reaching this bundle's delegated handler.
       this.on(section, 'click', event => this.handleClick(event), {capture:true});
       this.on(this.bottomBar, 'click', event => this.handleClick(event), {capture:true});
       this.on(this.modal, 'click', event => this.handleClick(event), {capture:true});
@@ -406,13 +401,7 @@
       this.listeners.push({target, type, listener, options});
     }
     portalBottomBar() {
-      // Some themes apply transform/contain/overflow to their main content. In
-      // iOS Safari that makes a nested `position: fixed` footer either scroll
-      // with the page or sit behind another sticky cart. Keep it at document
-      // level, where it is fixed to the viewport and outside theme overlays.
       if (!this.bottomBar || !document.body || this.bottomBar.parentElement === document.body) return;
-      // CSS custom properties normally inherit from the section. Preserve the
-      // merchant's checkout button colours after moving the footer to <body>.
       const styles = window.getComputedStyle(this.section);
       ['--vs-native-checkout-bg', '--vs-native-checkout-text'].forEach(name => {
         const value = styles.getPropertyValue(name).trim();
@@ -422,9 +411,6 @@
       this.bottomBar.dataset.vsBundleOwner = this.id;
     }
     portalModal() {
-      // The sticky pack footer is portalled above theme layout containers. The
-      // Quick View must be portalled too; otherwise a transformed theme parent
-      // can place the footer above part of the modal on iPhone.
       if (!this.modal || !document.body || this.modal.parentElement === document.body) return;
       const styles = window.getComputedStyle(this.section);
       ['--vs-image-bg'].forEach(name => {
@@ -447,10 +433,10 @@
       if (this.discountType === 'percentage') return `Buy ${this.requiredProducts} and get ${this.discountValue}% off`;
       return `Buy ${this.requiredProducts} for ${this.money(this.discountValue)}`;
     }
-    offerTotal(regular) {
+    offerTotal(regular, items = this.selected) {
       if (this.discountType === 'percentage') return regular * Math.max(0, 1 - Math.min(100, this.discountValue) / 100);
       if (this.discountType === 'free') {
-        const freeTotal = [...this.selected]
+        const freeTotal = [...items]
           .sort((left, right) => left.price - right.price)
           .slice(0, this.freeProducts)
           .reduce((sum, item) => sum + item.price, 0);
@@ -467,7 +453,6 @@
       const matching = featured ? this.variants(product).filter(variant => imageSource(variant.featured_image) === featured) : [];
       const available = matching.find(variant => variant.available);
       if (available) return available;
-      // Sizes can share a color even when only one size has an assigned image.
       const colorIndex = this.optionDefinitions(product).findIndex(option => /colou?r/i.test(option.name));
       const sameColor = colorIndex >= 0 && matching.length ? this.variants(product).find(variant => variant.available && variant.options[colorIndex] === matching[0].options[colorIndex]) : null;
       return sameColor || matching[0] || this.firstVariant(product);
@@ -494,15 +479,12 @@
         this.pinProductCard(entry);
         this.updateEmptyState();
       } catch (error) {
-        // A missing or unavailable handle should not prevent the collection from loading.
         if (error.name !== 'AbortError') return;
       }
     }
     swatchBackground(value) {
       const color = String(value || '').trim().toLowerCase().replace(/[ _-]+/g, ' ');
       if (/^#[0-9a-f]{3,8}$/i.test(color)) return color;
-      // Add or change hex values here for the exact Color option names used in Shopify.
-      // Hyphens, spaces, and capital letters in the option name are ignored.
       const manualSwatchColors = {
         'black':'#111111',
         'bottle green':'#0b4f32',
@@ -536,8 +518,6 @@
       const chart = this.chart(product);
       if (chart && this.config.chartInSlider) slides.push({src:chart, chart:true});
       const sold = !this.variants(product).some(variant => variant.available);
-      // The first slide is visible as soon as a product card is rendered.
-      // Do not defer it: lazy loading can leave visible cards blank in theme previews.
       const images = slides.length ? slides.map((slide, index) => {
         const source = escapeHTML(slide.src);
         const alt = escapeHTML(slide.chart ? 'Size chart for ' + product.title : product.title + ' — image ' + (index + 1));
@@ -606,7 +586,6 @@
     cardOptions(product, variant) {
       const options = this.optionDefinitions(product);
       const colorIndex = options.findIndex(option => /colou?r/i.test(option.name));
-      // Product cards stay compact, while still offering the two choices customers need most.
       const indexes = this.cardOptionIndexes(product);
       return indexes.map(index => {
         const option = options[index];
@@ -672,9 +651,6 @@
       this.loadButton.textContent = 'Loading products…';
       try {
         const url = new URL(this.nextURL, window.location.href);
-        // Shopify's Section Rendering API requires the enclosing section ID,
-        // not this app block's ID. Keeping loading manual avoids repeated
-        // requests when the button remains visible after a response.
         if (this.shopifySectionId) url.searchParams.set('section_id', this.shopifySectionId);
         const response = await fetch(url, this.events ? {signal:this.events.signal} : {});
         if (!response.ok) throw new Error('Unable to load products.');
@@ -692,8 +668,6 @@
         this.loadedPageURLs.add(requestURL);
         const previousNextURL = this.nextURL;
         const added = this.appendProducts(payload);
-        // A repeated or empty page is a theme pagination response error. Stop
-        // instead of repeatedly requesting it or showing duplicate products.
         if (!added || this.nextURL === previousNextURL) {
           this.nextURL = null;
           this.loadButton.hidden = true;
@@ -736,7 +710,6 @@
       if (button.hasAttribute('data-card-add')) {
         const cardOptionIndexes = this.cardOptionIndexes(entry.product);
         const productOptionCount = this.optionDefinitions(entry.product).filter(option => !(option.name === 'Title' && option.values[0] === 'Default Title')).length;
-        // Extra option types not shown on the card are completed in Quick View.
         if (productOptionCount > cardOptionIndexes.length) return this.openModal(entry, card, 'details');
         return this.toggleProduct(entry, this.variants(entry.product).find(item => String(item.id) === card.dataset.variantId));
       }
@@ -788,7 +761,6 @@
         if (option.name === 'Title' && option.values[0] === 'Default Title') return '';
         const isColor = index === colorIndex;
         return `<div class="vs-option-group"><span class="vs-option-label">${escapeHTML(option.name)}:</span><div class="vs-options">${option.values.map(value => {
-          // Availability respects prior groups; changing color can select an available size.
           const available = this.variants(product).some(variant => variant.available && variant.options[index] === value && variant.options.every((item,i) => i >= index || item === this.modalOptions[i]));
           if (isColor) return `<button type="button" class="vs-color-swatch" style="--vs-swatch:${this.swatchBackground(value)}" data-modal-option="${index}" data-value="${escapeHTML(value)}" aria-label="Select ${escapeHTML(option.name)}: ${escapeHTML(value)}" title="${escapeHTML(value)}" aria-pressed="${this.modalOptions[index] === value}" ${available ? '' : 'disabled'}><span class="vs-visually-hidden">${escapeHTML(value)}</span></button>`;
           return `<button type="button" class="vs-size" data-modal-option="${index}" data-value="${escapeHTML(value)}" aria-pressed="${this.modalOptions[index] === value}" ${available ? '' : 'disabled'}>${escapeHTML(value)}</button>`;
@@ -877,9 +849,7 @@
     setAddButton(button, variant, optionsSelected = true) {
       const selected = this.selected.some(item => item.variantId === String(variant?.id));
       const sold = !variant?.available;
-      const full = this.selected.length >= this.maxProducts && !selected;
-      // A selected variant remains actionable so the same card button can remove
-      // it from the temporary bundle.
+      const full = !this.allowAdditionalProducts && this.selected.length >= this.maxProducts && !selected;
       button.disabled = this.busy || !optionsSelected || sold || full;
       button.classList.toggle('is-added', selected);
       const text = !optionsSelected ? 'SELECT OPTIONS' : sold ? 'SOLD OUT' : selected ? 'REMOVE FROM PACK' : full ? 'PACK FULL' : 'ADD TO PACK';
@@ -895,8 +865,6 @@
       card.querySelectorAll('[data-card-option]').forEach(button => button.setAttribute('aria-pressed', String(selections[Number(button.dataset.cardOption)] === button.dataset.value)));
       card.querySelector('[data-card-price]').innerHTML = this.priceMarkup(displayVariant);
       this.setAddButton(card.querySelector('[data-card-add]'), variant, optionsSelected && !!variant);
-      // Keep Shopify's image order on load. Only move for a shopper's selection
-      // or a restored selection, rather than resetting galleries on every UI update.
       const galleryVariant = variant || previewVariant;
       if (syncGallery && galleryVariant?.featured_image) {
         const image = imageSource(galleryVariant.featured_image);
@@ -927,9 +895,7 @@
         if (fromModal) this.closeModal();
         return;
       }
-      if (this.selected.length >= this.maxProducts) return;
-      // Keep selections in session storage until checkout. This prevents cart drawers
-      // (including GoKwik) from opening once for every product a customer picks.
+      if (!this.allowAdditionalProducts && this.selected.length >= this.maxProducts) return;
       const selectedItem = {
         productId:String(entry.product.id),
         variantId:String(variant.id),
@@ -941,7 +907,6 @@
         image:imageSource(variant.featured_image) || imageSource(entry.product.images?.[0])
       };
       this.selected.push(selectedItem);
-      // Keep the card on the option selected in quick view so its state stays in sync.
       const card = [...this.grid.querySelectorAll('.vs-card')].find(card => card.dataset.productId === String(entry.product.id));
       if (card) {
         card.dataset.variantId = String(variant.id);
@@ -968,13 +933,14 @@
       if (modalError) { modalError.hidden = !error; modalError.textContent = error ? message : ''; }
     }
     saveSelection() {
-      try { sessionStorage.setItem(this.storageKey, JSON.stringify(this.selected)); } catch (_) { /* Storage may be blocked. */ }
+      try { sessionStorage.setItem(this.storageKey, JSON.stringify(this.selected)); } catch (_) {}
     }
     async restoreSelection() {
       try {
         const saved = JSON.parse(sessionStorage.getItem(this.storageKey) || '[]');
         if (Array.isArray(saved) && saved.length) {
-          this.selected = saved.filter(item => item.variantId && Number.isFinite(item.price)).slice(0, this.maxProducts);
+          const restored = saved.filter(item => item.variantId && Number.isFinite(item.price));
+          this.selected = this.allowAdditionalProducts ? restored : restored.slice(0, this.maxProducts);
           this.grid.querySelectorAll('.vs-card').forEach(card => {
             const item = this.selected.find(item => item.productId === card.dataset.productId);
             if (item) {
@@ -987,7 +953,7 @@
           });
           this.updateUI();
         }
-      } catch (_) { /* A new pack remains usable when storage is unavailable. */ }
+      } catch (_) {}
     }
     async checkoutBundle(checkout) {
       if (!this.canCheckout()) return;
@@ -996,19 +962,14 @@
       this.showMessage('Adding your pack to cart…');
       try {
         await this.requestCart('cart/add.js', {items:this.selected.map(item => ({id:item.variantId, quantity:1}))});
-        try { sessionStorage.removeItem(this.storageKey); } catch (_) { /* Checkout can continue when storage is unavailable. */ }
+        try { sessionStorage.removeItem(this.storageKey); } catch (_) {}
         document.dispatchEvent(new CustomEvent('cart:updated'));
         if (checkout.hasAttribute('data-native-checkout')) return window.location.assign(this.root + 'checkout');
         if (checkout.closest('.gokwik-checkout')) {
           if (typeof window.onCheckoutClick === 'function') return window.onCheckoutClick(checkout.querySelector('button') || checkout);
-          // Do not silently fall back to Shopify checkout. A GoKwik-labelled
-          // button must only open GoKwik; a fallback here makes an incomplete
-          // GoKwik theme installation look like it is working.
           throw new Error('GoKwik checkout is not ready. Enable the GoKwik app embed in this published theme and reload the page.');
         }
         if (checkout.closest('.vs-custom-checkout')) return this.runCustomCheckout(checkout);
-        // Shiprocket attaches its own click handler to the rendered control. Let it
-        // run after the bundle has been added, without re-entering this listener.
         return this.handoffToProvider(checkout);
       } catch (error) {
         this.busy = false;
@@ -1018,10 +979,6 @@
     }
     runCustomCheckout(checkout) {
       const code = String(this.config.customCheckoutCode || '').trim();
-      // A custom button may be provider-supplied HTML (for example, Shoprocket's
-      // headless placeholder) without any additional JavaScript here. In that
-      // case, invoke the provider's rendered control. Never fall back to Shopify
-      // checkout: that masks a missing/incorrect provider integration.
       if (!code) return this.handoffToProvider(checkout, true);
       const payload = {
         checkoutElement:checkout,
@@ -1031,8 +988,6 @@
         selectedItems:this.selected.map(item => ({id:item.variantId, quantity:1}))
       };
       try {
-        // This is merchant-authored storefront integration code. It receives only
-        // public checkout context after the bundle has been added to cart.
         new Function('payload', 'window', 'document', code)(payload, window, document);
       } catch (error) {
         this.busy = false;
@@ -1044,15 +999,11 @@
       const providerButton = checkout.matches('button, a, [role="button"]')
         ? checkout
         : checkout.querySelector('button, a, [role="button"]');
-      // The generic custom trigger is deliberately not a Shopify checkout
-      // button. It only tells the merchant that a provider control is missing.
       if (!providerButton || (isCustom && providerButton.classList.contains('vs-custom-checkout-trigger'))) {
         throw new Error(isCustom
           ? 'Custom checkout is not ready. Add the Shoprocket button HTML or custom checkout code, then reload the page.'
           : 'Shiprocket checkout is not ready. Enable its app embed in this published theme and reload the page.');
       }
-      // updateUI disables controls while cart items are being added. Re-enable the
-      // provider control briefly so its own click handler can receive this handoff.
       const wasDisabled = 'disabled' in providerButton ? providerButton.disabled : false;
       const previousAriaDisabled = providerButton.getAttribute('aria-disabled');
       if ('disabled' in providerButton) providerButton.disabled = false;
@@ -1067,7 +1018,7 @@
         else providerButton.setAttribute('aria-disabled', previousAriaDisabled);
       }
     }
-    canCheckout() { return !this.busy && this.selected.length === this.offerProducts; }
+    canCheckout() { return !this.busy && (this.allowAdditionalProducts ? this.selected.length >= this.offerProducts : this.selected.length === this.offerProducts); }
     updateCheckout() {
       const enabled = this.canCheckout();
       this.checkouts.forEach(checkout => {
@@ -1101,8 +1052,11 @@
       this.itemCount.textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
       const regular = this.selected.reduce((sum, item) => sum + item.price, 0);
       const compare = this.selected.reduce((sum, item) => sum + Math.max(item.price, item.comparePrice || 0), 0);
-      const offer = count === this.offerProducts;
-      const total = offer ? this.offerTotal(regular) : regular;
+      const offer = this.allowAdditionalProducts ? count >= this.offerProducts : count === this.offerProducts;
+      const bundleItems = this.allowAdditionalProducts ? this.selected.slice(0, this.offerProducts) : this.selected;
+      const bundleRegular = bundleItems.reduce((sum, item) => sum + item.price, 0);
+      const additionalRegular = regular - bundleRegular;
+      const total = offer ? this.offerTotal(bundleRegular, bundleItems) + additionalRegular : regular;
       this.total.textContent = this.money(total);
       const originalElement = this.originalTotal;
       originalElement.hidden = compare <= total;
@@ -1151,7 +1105,7 @@
 
 {% schema %}
 {
-  "name": "VsApps Bundle template",
+  "name": "Bundle Template",
   "target": "section",
   "settings": [
     {
@@ -1195,6 +1149,17 @@
       "label": "Fixed bundle price or percentage off",
       "default": 999,
       "info": "Enter the total price for a fixed-price offer, or the percentage for a percentage-off offer."
+    },
+    {
+      "type": "header",
+      "content": "Customization"
+    },
+    {
+      "type": "checkbox",
+      "id": "allow_additional_products",
+      "label": "Allow products after the bundle is complete",
+      "default": false,
+      "info": "When enabled, shoppers can add more products after completing the bundle, including another variant of a product already in the bundle."
     },
     {
       "type": "header",

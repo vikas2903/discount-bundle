@@ -15,6 +15,8 @@ import {
   listVolumeDiscounts,
   resolveVolumeFunctionHandle,
 } from "../services/volume-discount.server";
+import { listBundleDiscounts } from "../services/bundle-discount.server";
+import { offerTargetsOverlap } from "../utils/offer-overlap";
 
 export const action = async ({ request }) => {
   const { admin, billing } = await authenticate.admin(request);
@@ -23,7 +25,15 @@ export const action = async ({ request }) => {
     parseVolumeConfig(String(formData.get("config") || "{}")),
   );
   const validationErrors = validateVolumeConfig(config);
-  const { discounts: existingDiscounts } = await listVolumeDiscounts(admin);
+  const [{ discounts: existingDiscounts, graphqlErrors: volumeErrors }, { discounts: bundleDiscounts, graphqlErrors: bundleErrors }] =
+    await Promise.all([listVolumeDiscounts(admin), listBundleDiscounts(admin)]);
+  const discountLoadErrors = [...volumeErrors, ...bundleErrors];
+  if (discountLoadErrors.length > 0) {
+    return createActionError(
+      `Existing offers could not be checked for conflicts: ${discountLoadErrors.map(({ message }) => message).join(" | ")}`,
+      config,
+    );
+  }
   const subscription = await checkSubscription(billing);
 
   if (!subscription && existingDiscounts.some((discount) => discount.status === "ACTIVE")) {
@@ -36,11 +46,15 @@ export const action = async ({ request }) => {
   const overlaps = existingDiscounts.filter(
     (discount) =>
       discount.status === "ACTIVE" &&
-      discount.config.mode !== "legacy-product" &&
-      volumeTargetsOverlap(config, discount.config),
+      offerTargetsOverlap(config, discount.config),
+  );
+  const bundleOverlaps = bundleDiscounts.filter(
+    (discount) =>
+      discount.status === "ACTIVE" &&
+      offerTargetsOverlap(config, discount.config?.eligibility || discount.config),
   );
 
-  if (validationErrors.length > 0 || overlaps.length > 0) {
+  if (validationErrors.length > 0 || overlaps.length > 0 || bundleOverlaps.length > 0) {
     return {
       ok: false,
       config,
@@ -49,6 +63,10 @@ export const action = async ({ request }) => {
         ...overlaps.map((discount) => ({
           field: ["config"],
           message: `This discount overlaps with active volume discount "${discount.title}". Deactivate or change targeting before saving.`,
+        })),
+        ...bundleOverlaps.map((discount) => ({
+          field: ["config"],
+          message: `This quantity offer overlaps with active bundle offer "${discount.title}". Deactivate or change targeting before saving.`,
         })),
       ],
       graphqlErrors: [],
@@ -143,23 +161,6 @@ function createInitialForm() {
     combinations: { ...DEFAULT_VOLUME_CONFIG.combinations },
     storefrontMessages: { ...DEFAULT_VOLUME_CONFIG.storefrontMessages },
   };
-}
-
-function volumeTargetsOverlap(left, right) {
-  const leftMode = targetMode(left);
-  const rightMode = targetMode(right);
-  if (leftMode === "all" || rightMode === "all" || leftMode !== rightMode) return true;
-
-  const key = leftMode === "products" ? "selectedProductIds" : "selectedCollectionIds";
-  return (left[key] || []).some((id) => (right[key] || []).includes(id));
-}
-
-function targetMode(config) {
-  if (config?.productMode === "collections" || config?.productMode === "products") {
-    return config.productMode;
-  }
-
-  return config?.selectedCollectionIds?.length ? "collections" : "all";
 }
 
 function createActionError(message, config) {

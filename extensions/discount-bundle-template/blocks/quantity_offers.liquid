@@ -1,124 +1,52 @@
 {%- liquid
-assign offer_product = block.settings.product | default: product
-assign selected_variant = offer_product.selected_or_first_available_variant
+  assign offer_collection = block.settings.collection
+  assign is_eligible_product = false
+  if offer_collection != blank
+    for product_collection in product.collections
+      if product_collection.handle == offer_collection.handle
+        assign is_eligible_product = true
+        break
+      endif
+    endfor
+  endif
 -%}
-
-<section
-class="quantity-offers quantity-offers--{{ block.id }}"
-data-quantity-offers
-data-shop-root="{{ routes.root_url }}"
-data-button-action="{{ block.settings.button_action | default: 'checkout' }}"
-data-custom-checkout="{{ block.settings.custom_checkout_code | escape }}"
-style="--qo-accent: {{ block.settings.accent_color }}; --qo-bg: {{ block.settings.background_color }}; --qo-border: #dbe4ea; --qo-text: {{ block.settings.text_color }};"
->
-{%- if offer_product != blank -%}
-<div class="quantity-offers__header">
-{%- if block.settings.heading != blank -%}<p class="quantity-offers__eyebrow">{{ block.settings.heading }}</p>{%- endif -%}
-{%- if block.settings.subheading != blank -%}<p class="quantity-offers__subheading">{{ block.settings.subheading }}</p>{%- endif -%}
-</div>
-
-{%- if offer_product.variants.size > 1 and block.settings.show_variant_picker -%}
-<label class="quantity-offers__variant-label">
-<span>Choose option</span>
-<select class="quantity-offers__variant" data-variant-select>
-{%- for variant in offer_product.variants -%}
-<option value="{{ variant.id }}" data-price="{{ variant.price }}" {% unless variant.available %}disabled{% endunless %} {% if variant.id == selected_variant.id %}selected{% endif %}>
-{{ variant.title }}{% unless variant.available %} — Sold out{% endunless %}
-</option>
-{%- endfor -%}
-</select>
-</label>
+{%- if is_eligible_product or request.design_mode -%}
+  <section class="quantity-offers quantity-offers--{{ block.id }}" style="--qo-accent:{{ block.settings.accent_color | default: '#00865a' }}">
+    {%- if offer_collection == blank -%}
+      <p class="quantity-offers__empty">Choose an offer collection. This block will appear only on product pages for products in that collection.</p>
+    {%- elsif is_eligible_product -%}
+      <header class="quantity-offers__header"><span></span><strong>{{ block.settings.heading }}</strong><span></span></header>
+      <div class="quantity-offers__tiers" aria-label="Choose a quantity offer">
+        <button type="button" class="quantity-offers__tier quantity-offers__tier--base" data-tier data-quantity="1"><i></i><span><strong>Buy 1</strong><small>Everyday price</small></span><b><strong data-base-price></strong><s data-base-compare></s></b></button>
+        <button type="button" class="quantity-offers__tier" data-tier data-quantity="{{ block.settings.tier_2_quantity }}"><i></i><span><strong>Buy {{ block.settings.tier_2_quantity }}</strong><small>{{ block.settings.tier_2_label }}</small></span><b>Save {{ block.settings.tier_2_discount_value }}% off</b></button>
+        <button type="button" class="quantity-offers__tier" data-tier data-quantity="{{ block.settings.tier_3_quantity }}"><i></i><span><strong>Buy {{ block.settings.tier_3_quantity }}</strong><small>{{ block.settings.tier_3_label }}</small></span><b>Save {{ block.settings.tier_3_discount_value }}% off</b></button>
+      </div>
+      <section class="quantity-offers__builder">
+        <div class="quantity-offers__builder-title"><i></i><span><strong>Select products &amp; variants</strong><small>Choose any combination from {{ offer_collection.title }}</small></span></div>
+        <div class="quantity-offers__slots" data-slots></div>
+        <div class="quantity-offers__picker" data-picker hidden><div role="dialog" aria-modal="true" aria-label="Choose a product"><button type="button" data-picker-close aria-label="Close product picker">×</button><input type="search" data-product-search placeholder="Search products" aria-label="Search products"><div data-product-results></div></div></div>
+      </section>
+      <div class="quantity-offers__footer"><button type="button" class="quantity-offers__button" data-add-button>Add to cart</button></div>
+      <p class="quantity-offers__toast" data-toast role="status" hidden></p>
+      {%- paginate offer_collection.products by 20 -%}
+        <script type="application/json" data-catalog>[{%- for item in offer_collection.products -%}{"id":{{ item.id | json }},"title":{{ item.title | json }},"image":{%- if item.featured_image -%}{{ item.featured_image | image_url: width: 160 | json }}{%- else -%}null{%- endif -%},"options":{{ item.options_with_values | json }},"variants":{{ item.variants | json }}}{% unless forloop.last %},{% endunless %}{%- endfor -%}]</script>
+      {%- endpaginate -%}
+    {%- else -%}
+      <p class="quantity-offers__empty">This offer is shown only for products in the selected collection.</p>
+    {%- endif -%}
+  </section>
 {%- endif -%}
-
-<div class="quantity-offers__tiers" data-tier-list>
-{%- if block.settings.show_tier_2 -%}
-<button type="button" class="quantity-offers__tier" data-tier data-quantity="{{ block.settings.tier_2_quantity }}" data-type="{{ block.settings.tier_2_discount_type }}" data-value="{{ block.settings.tier_2_discount_value }}">
-<span class="quantity-offers__radio"></span><span><strong>Buy {{ block.settings.tier_2_quantity }}</strong><small>{{ block.settings.tier_2_label }}</small></span><b data-tier-saving></b>
-</button>
-{%- endif -%}
-{%- if block.settings.show_tier_3 -%}
-<button type="button" class="quantity-offers__tier" data-tier data-quantity="{{ block.settings.tier_3_quantity }}" data-type="{{ block.settings.tier_3_discount_type }}" data-value="{{ block.settings.tier_3_discount_value }}">
-<span class="quantity-offers__radio"></span><span><strong>Buy {{ block.settings.tier_3_quantity }}</strong><small>{{ block.settings.tier_3_label }}</small></span><b data-tier-saving></b>
-</button>
-{%- endif -%}
-{%- if block.settings.show_tier_4 -%}
-<button type="button" class="quantity-offers__tier" data-tier data-quantity="{{ block.settings.tier_4_quantity }}" data-type="{{ block.settings.tier_4_discount_type }}" data-value="{{ block.settings.tier_4_discount_value }}">
-<span class="quantity-offers__radio"></span><span><strong>Buy {{ block.settings.tier_4_quantity }}</strong><small>{{ block.settings.tier_4_label }}</small></span><b data-tier-saving></b>
-</button>
-{%- endif -%}
-</div>
-<div class="quantity-offers__footer">
-<label class="quantity-offers__quantity-label">Quantity <input data-quantity-input type="number" min="1" value="1"></label>
-<button type="button" class="quantity-offers__button" data-add-button {% unless selected_variant.available %}disabled{% endunless %}>{{ block.settings.button_label }}</button>
-</div>
-
-<p class="quantity-offers__notice" data-notice>{{ block.settings.footer_note }}</p>
-<script type="application/json" data-variants>{{ offer_product.variants | json }}</script>
-{%- else -%}
-<p class="quantity-offers__empty">Choose a product in this app block’s settings.</p>
-{%- endif -%}
-</section>
-
 <style>
-.quantity-offers { background:var(--qo-bg); border:1px solid var(--qo-border); border-radius:14px; color:var(--qo-text); padding:18px; max-width:620px; }
-.quantity-offers__header { margin-bottom:14px; }.quantity-offers__eyebrow { margin:0; color:var(--qo-accent); font-weight:800; font-size:15px; }.quantity-offers__subheading,.quantity-offers__notice { margin:5px 0 0; color:#64748b; font-size:13px; line-height:1.45; }
-.quantity-offers__variant-label { display:grid; gap:6px; margin:0 0 14px; font-size:13px; font-weight:700; }.quantity-offers__variant,.quantity-offers__quantity-label input { border:1px solid var(--qo-border); border-radius:8px; padding:9px; background:#fff; color:#1f2937; }
-.quantity-offers__tiers { display:grid; gap:9px; }.quantity-offers__tier { display:grid; grid-template-columns:20px minmax(0,1fr) auto; text-align:left; align-items:center; gap:10px; border:1px solid var(--qo-border); border-radius:10px; padding:12px; background:#fff; color:var(--qo-text); cursor:pointer; }.quantity-offers__tier:hover,.quantity-offers__tier.is-selected { border-color:var(--qo-accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--qo-accent) 18%,transparent); }.quantity-offers__tier strong,.quantity-offers__tier small { display:block; }.quantity-offers__tier small { margin-top:2px; color:#64748b; font-size:12px; }.quantity-offers__tier b { color:var(--qo-accent); font-size:13px; }.quantity-offers__radio { width:15px; height:15px; border:2px solid #94a3b8; border-radius:50%; }.quantity-offers__tier.is-selected .quantity-offers__radio { border-color:var(--qo-accent); box-shadow:inset 0 0 0 3px #fff; background:var(--qo-accent); }
-.quantity-offers__footer { display:flex; gap:10px; align-items:end; margin-top:14px; }.quantity-offers__quantity-label { display:grid; gap:5px; font-size:12px; font-weight:700; }.quantity-offers__quantity-label input { width:70px; }.quantity-offers__button { flex:1; border:0; border-radius:8px; padding:11px 14px; background:var(--qo-accent); color:#fff; font-weight:800; cursor:pointer; }.quantity-offers__button:disabled { opacity:.55; cursor:not-allowed; }.quantity-offers__empty { margin:0; padding:12px; color:#64748b; }
-@media(max-width:480px) { .quantity-offers { padding:14px; }.quantity-offers__footer { align-items:stretch; flex-direction:column; }.quantity-offers__quantity-label input { width:100%; box-sizing:border-box; } }
+.quantity-offers--{{ block.id }}{box-sizing:border-box;max-width:680px;padding:16px;border:1px solid #dce8ee;border-radius:14px;background:#f8fcff;color:#102a43;font-family:inherit}.quantity-offers--{{ block.id }} *{box-sizing:border-box}.quantity-offers--{{ block.id }} button{font:inherit}.quantity-offers--{{ block.id }} .quantity-offers__header{display:flex;align-items:center;gap:8px;margin:0 0 14px;text-align:center}.quantity-offers--{{ block.id }} .quantity-offers__header>span{flex:1;height:2px;background:var(--qo-accent)}.quantity-offers--{{ block.id }} .quantity-offers__header strong{color:var(--qo-accent);font-size:20px;line-height:1.2}.quantity-offers--{{ block.id }} .quantity-offers__tiers{display:grid;gap:6px}.quantity-offers--{{ block.id }} .quantity-offers__tier{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:9px;min-height:48px;padding:7px 9px;border:1px solid #d5e1e9;border-radius:10px;background:#fff;color:#102a43;text-align:left;cursor:pointer}.quantity-offers--{{ block.id }} .quantity-offers__tier i,.quantity-offers--{{ block.id }} .quantity-offers__builder-title>i{width:18px;height:18px;border:2px solid #9dbbd1;border-radius:50%}.quantity-offers--{{ block.id }} .quantity-offers__tier strong,.quantity-offers--{{ block.id }} .quantity-offers__tier small,.quantity-offers--{{ block.id }} .quantity-offers__builder-title strong,.quantity-offers--{{ block.id }} .quantity-offers__builder-title small{display:block}.quantity-offers--{{ block.id }} .quantity-offers__tier strong,.quantity-offers--{{ block.id }} .quantity-offers__builder-title strong{font-size:13px}.quantity-offers--{{ block.id }} .quantity-offers__tier small,.quantity-offers--{{ block.id }} .quantity-offers__builder-title small{margin-top:2px;color:#5f88a6;font-size:11px}.quantity-offers--{{ block.id }} .quantity-offers__tier>b{color:var(--qo-accent);font-size:12px;white-space:nowrap}.quantity-offers--{{ block.id }} .quantity-offers__tier--base>b{display:grid;gap:2px;color:#102a43;text-align:right}.quantity-offers--{{ block.id }} .quantity-offers__tier--base>b strong{font-size:15px}.quantity-offers--{{ block.id }} .quantity-offers__tier--base>b s{color:#6b7280;font-weight:400}.quantity-offers--{{ block.id }} .quantity-offers__tier.is-selected{border-color:var(--qo-accent)}.quantity-offers--{{ block.id }} .quantity-offers__tier.is-selected i,.quantity-offers--{{ block.id }} .quantity-offers__builder-title>i{border-color:var(--qo-accent);background:var(--qo-accent)}.quantity-offers--{{ block.id }} .quantity-offers__builder{margin-top:8px;padding:12px;border:1px solid var(--qo-accent);border-radius:11px}.quantity-offers--{{ block.id }} .quantity-offers__builder-title{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:9px}.quantity-offers--{{ block.id }} .quantity-offers__slots{display:grid;gap:10px;margin-top:12px}.quantity-offers--{{ block.id }} .quantity-offers__slot{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;padding:10px;border:1px solid #dce7ed;border-radius:10px;background:#fff}.quantity-offers--{{ block.id }} .quantity-offers__slot img,.quantity-offers--{{ block.id }} .quantity-offers__image-empty{width:72px;height:88px;border-radius:8px;object-fit:cover;background:#f5f7f8}.quantity-offers--{{ block.id }} .quantity-offers__image-empty{display:grid;place-items:center;color:#5f88a6;font-size:10px}.quantity-offers--{{ block.id }} .quantity-offers__slot-fields{display:grid;align-content:center;gap:6px;min-width:0}.quantity-offers--{{ block.id }} .quantity-offers__product-choice{display:grid;gap:3px;padding:7px;border:1px solid #e1e9ef;border-radius:7px;background:#f8fbfd;color:#5f88a6;font-size:10px;font-weight:700}.quantity-offers--{{ block.id }} .quantity-offers__product-choice>small{color:var(--qo-accent);font-size:9px;text-transform:uppercase}.quantity-offers--{{ block.id }} .quantity-offers__product-choice button{width:100%;padding:2px 0;border:0;background:transparent;color:#102a43;font:inherit;font-weight:700;text-align:left;cursor:pointer}.quantity-offers--{{ block.id }} .quantity-offers__swatches{display:grid;gap:4px;font-size:10px}.quantity-offers--{{ block.id }} .quantity-offers__swatches strong{display:grid;gap:1px;color:#102a43}.quantity-offers--{{ block.id }} .quantity-offers__swatches strong small{color:#5f88a6;font-size:9px;font-weight:600}.quantity-offers--{{ block.id }} .quantity-offers__swatches>span{display:flex;flex-wrap:wrap;gap:5px}.quantity-offers--{{ block.id }} .quantity-offers__swatches button{min-width:45px;padding:5px 8px;border:1px solid var(--qo-accent);border-radius:6px;background:#fff;color:#102a43;cursor:pointer}.quantity-offers--{{ block.id }} .quantity-offers__swatches button.is-selected{background:var(--qo-accent);color:#fff}.quantity-offers--{{ block.id }} .quantity-offers__swatches button:disabled{opacity:.35;cursor:not-allowed}.quantity-offers--{{ block.id }} .quantity-offers__swatches.is-colour button{display:grid;place-items:center;min-width:29px;width:29px;height:29px;padding:3px;border-radius:50%;background:#fff}.quantity-offers--{{ block.id }} .quantity-offers__swatches.is-colour button em{width:100%;height:100%;border-radius:50%;background:var(--qo-swatch)}.quantity-offers--{{ block.id }} .quantity-offers__swatches.is-colour button.is-selected{padding:2px;border:2px solid var(--qo-accent)}.quantity-offers--{{ block.id }} .quantity-offers__footer{display:flex;margin-top:12px}.quantity-offers--{{ block.id }} .quantity-offers__button{display:flex;flex:1;align-items:center;justify-content:center;min-height:39px;border:0;border-radius:9px;background:var(--qo-accent);color:#fff;font-size:13px;font-weight:800;cursor:pointer}.quantity-offers--{{ block.id }} .quantity-offers__button:disabled{opacity:.6;cursor:not-allowed}.quantity-offers--{{ block.id }} .quantity-offers__empty{margin:0;color:#5f88a6;font-size:13px}.quantity-offers--{{ block.id }} .quantity-offers__picker{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:16px;background:#0006}.quantity-offers--{{ block.id }} .quantity-offers__picker[hidden]{display:none}.quantity-offers--{{ block.id }} .quantity-offers__picker>div{position:relative;width:min(500px,100%);max-height:80vh;overflow:auto;padding:16px;border-radius:11px;background:#fff}.quantity-offers--{{ block.id }} .quantity-offers__picker input{width:100%;min-height:40px;padding:8px 10px;border:1px solid #d5e1e9;border-radius:7px;font:inherit}.quantity-offers--{{ block.id }} [data-product-results]{display:grid;gap:6px;margin-top:10px}.quantity-offers--{{ block.id }} [data-product-pick]{padding:9px;border:1px solid #dce7ed;border-radius:7px;background:#fff;color:#102a43;text-align:left;cursor:pointer}.quantity-offers--{{ block.id }} [data-picker-close]{position:absolute;top:5px;right:8px;border:0;background:none;font-size:22px;cursor:pointer}.quantity-offers--{{ block.id }} .quantity-offers__toast{position:fixed;right:18px;bottom:18px;z-index:9;margin:0;padding:12px 16px;border-radius:9px;background:var(--qo-accent);color:#fff;font-weight:700}.quantity-offers--{{ block.id }} .quantity-offers__toast[hidden]{display:none}@media(max-width:480px){.quantity-offers--{{ block.id }}{padding:14px}.quantity-offers--{{ block.id }} .quantity-offers__slot{grid-template-columns:60px minmax(0,1fr)}.quantity-offers--{{ block.id }} .quantity-offers__slot img,.quantity-offers--{{ block.id }} .quantity-offers__image-empty{width:60px;height:75px}}
 </style>
-
 <script>
-(() => {
-const root = document.querySelector('.quantity-offers--{{ block.id }}'); if (!root) return;
-const tiers = [...root.querySelectorAll('[data-tier]')]; const qtyInput = root.querySelector('[data-quantity-input]'); const button = root.querySelector('[data-add-button]'); const notice = root.querySelector('[data-notice]'); const variantSelect = root.querySelector('[data-variant-select]');
-let selectedTier = tiers[0] || null;
-const money = new Intl.NumberFormat(undefined, { style:'currency', currency:'{{ cart.currency.iso_code | default: shop.currency }}' });
-const selectedVariantId = () => Number(variantSelect?.value || '{{ selected_variant.id }}');
-const formatTier = (tier) => { const quantity=Number(tier.dataset.quantity||0); const value=Number(tier.dataset.value||0); return tier.dataset.type === 'fixed' ? `Save ${money.format(value)} each` : `Save ${value}%`; };
-const selectTier = (tier) => { selectedTier=tier; tiers.forEach((item)=>item.classList.toggle('is-selected',item===tier)); qtyInput.value=tier.dataset.quantity; };
-tiers.forEach((tier) => { tier.querySelector('[data-tier-saving]').textContent=formatTier(tier); tier.addEventListener('click',()=>selectTier(tier)); }); if (selectedTier) selectTier(selectedTier);
-button?.addEventListener('click', async () => {
-const quantity=Math.max(1,Number(qtyInput.value||1)); const variantId=selectedVariantId(); if (!variantId) return;
-button.disabled=true; button.textContent='Adding...';
-try { const response=await fetch((root.dataset.shopRoot||'/')+'cart/add.js',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({items:[{id:variantId,quantity,properties:{_quantity_offer:`Buy ${quantity}`,_quantity_offer_source:'discount-bundle-app'}}]})}); if(!response.ok) throw new Error('Could not add items');
-const action=root.dataset.buttonAction||'cart'; if(action==='custom' && root.dataset.customCheckout){ const payload={variantId,quantity,cartUrl:(root.dataset.shopRoot||'/')+'cart',checkoutUrl:(root.dataset.shopRoot||'/')+'checkout'}; new Function('payload','window','document',root.dataset.customCheckout)(payload,window,document); return; } window.location.href=(root.dataset.shopRoot||'/')+(action==='checkout'?'checkout':'cart');
-} catch(error) { notice.textContent='Could not add this offer to cart. Please try again.'; button.disabled=false; button.textContent='{{ block.settings.button_label | escape }}'; }
-});
-})();
+(()=>{const root=document.querySelector('.quantity-offers--{{ block.id }}'),catalogEl=root?.querySelector('[data-catalog]');if(!root||root.dataset.ready||!catalogEl)return;root.dataset.ready='1';const normalise=p=>({...p,options:p.options||[],variants:(p.variants||[]).map(v=>({...v,price:typeof v.price==='string'?Math.round(Number(v.price)*100):Number(v.price),compare_at_price:typeof v.compare_at_price==='string'?Math.round(Number(v.compare_at_price)*100):Number(v.compare_at_price||0)}))}),catalog=JSON.parse(catalogEl.textContent||'[]').map(normalise),tiers=[...root.querySelectorAll('[data-tier]')],slots=root.querySelector('[data-slots]'),builder=root.querySelector('.quantity-offers__builder'),picker=root.querySelector('[data-picker]'),search=root.querySelector('[data-product-search]'),results=root.querySelector('[data-product-results]'),add=root.querySelector('[data-add-button]'),toast=root.querySelector('[data-toast]'),base=root.querySelector('[data-base-price]'),compare=root.querySelector('[data-base-compare]'),money=new Intl.NumberFormat(undefined,{style:'currency',currency:'{{ cart.currency.iso_code | default: shop.currency }}'}),current='{{ product.id }}';let active=tiers[1]||tiers[0],choices=[],slot=0,loaded=false,timer;const esc=x=>String(x||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])),product=id=>catalog.find(p=>String(p.id)===String(id)),variant=(p,id)=>(p?.variants||[]).find(v=>String(v.id)===String(id)&&v.available)||(p?.variants||[]).find(v=>v.available),fresh=()=>{const p=product(current)||catalog[0],v=variant(p);return{productId:p?.id,variantId:v?.id}},colour=value=>{const t=String(value||'').toLowerCase(),m={black:'#202124',white:'#fff',grey:'#8c9299',gray:'#8c9299',blue:'#4d6fff',navy:'#1d315c',green:'#4d8a58',red:'#d65252',pink:'#ee9db7',purple:'#8a64b8',yellow:'#e4bd47',orange:'#e6813c',brown:'#855b43',beige:'#d9bd9c',cream:'#f1dfc8'},k=Object.keys(m).find(k=>t.includes(k));return m[k]||'#8796a5'},groups=p=>(p?.options||[]).map((o,i)=>{const name=typeof o==='string'?o:o.name,values=(typeof o==='string'?[...new Set((p.variants||[]).map(v=>v.options?.[i]))]:o.values||[]).map(v=>typeof v==='string'?v:v.name);return{name,values,index:i}}).filter(g=>!(g.name==='Title'&&g.values.length===1)),draw=()=>{const count=Math.max(1,Number(active?.dataset.quantity)||1);choices=choices.slice(0,count);while(choices.length<count)choices.push(fresh());const first=variant(product(choices[0]?.productId),choices[0]?.variantId);base.textContent=first?money.format(first.price/100):'';compare.textContent=first?.compare_at_price>first?.price?money.format(first.compare_at_price/100):'';slots.innerHTML=choices.map((choice,i)=>{const p=product(choice.productId),v=variant(p,choice.variantId),image=p?.image?`<img src="${esc(p.image)}" alt="${esc(p.title)}">`:'<span class="quantity-offers__image-empty">Product</span>',swatches=groups(p).map(g=>{const color=/colou?r|shade|tone/i.test(g.name),buttons=g.values.map(value=>{const selectable=(p?.variants||[]).some(x=>x.available&&x.options.every((option,n)=>n===g.index?option===value:option===v?.options?.[n])),attrs=color?` style="--qo-swatch:${colour(value)}" title="${esc(value)}" aria-label="${esc(g.name)}: ${esc(value)}"`:'';return`<button type="button" data-swatch="${i}" data-option="${g.index}" data-value="${esc(value)}"${v?.options?.[g.index]===value?' class="is-selected"':''}${selectable?'':' disabled'}${attrs}>${color?'<em></em>':esc(value)}</button>`}).join('');return`<div class="quantity-offers__swatches${color?' is-colour':''}"><strong><small>Choose</small>${esc(g.name)}</strong><span>${buttons}</span></div>`}).join('');return`<article class="quantity-offers__slot">${image}<div class="quantity-offers__slot-fields"><label class="quantity-offers__product-choice"><small>Product ${i+1}</small>Choose product<button type="button" data-product="${i}">${esc(p?.title)}</button></label>${swatches}</div></article>`}).join('')},choose=t=>{active=t;tiers.forEach(x=>x.classList.toggle('is-selected',x===t));t.insertAdjacentElement('afterend',builder);draw()},show=()=>{const query=search.value.toLowerCase();results.innerHTML=catalog.filter(p=>p.title.toLowerCase().includes(query)).slice(0,30).map(p=>`<button type="button" data-product-pick="${p.id}">${esc(p.title)}</button>`).join('')||'No products found'},load=async()=>{if(loaded)return;loaded=true;try{for(let page=1;;page+=1){const response=await fetch('{{ offer_collection.url }}/products.json?limit=250&page='+page);if(!response.ok)throw 0;const items=(await response.json()).products||[];items.map(normalise).forEach(p=>{if(!product(p.id))catalog.push(p)});if(items.length<250)break}show()}catch(_){loaded=false}},notify=message=>{toast.textContent=message;toast.hidden=false;clearTimeout(timer);timer=setTimeout(()=>toast.hidden=true,2500)},addToCart=async()=>{const quantities=new Map;choices.forEach(choice=>{const v=variant(product(choice.productId),choice.variantId);if(v)quantities.set(String(v.id),(quantities.get(String(v.id))||0)+1)});const items=[...quantities].map(([id,quantity])=>({id:Number(id),quantity}));if(!items.length)return notify('Choose an available product first.');add.disabled=true;add.textContent='Adding…';try{const response=await fetch('{{ routes.root_url }}cart/add.js',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({items})});if(!response.ok)throw 0;document.dispatchEvent(new CustomEvent('cart:updated'));add.textContent='Added to cart';notify('Products added to cart');setTimeout(()=>{add.disabled=false;add.textContent='Add to cart'},2500)}catch(_){add.disabled=false;add.textContent='Add to cart';notify('Could not add this offer. Please try again.')}};root.addEventListener('click',event=>{const t=event.target.closest('[data-tier]');if(t)return choose(t);const b=event.target.closest('[data-product]');if(b){slot=Number(b.dataset.product);picker.hidden=false;search.value='';show();search.focus();load();return}const picked=event.target.closest('[data-product-pick]');if(picked){const p=product(picked.dataset.productPick),v=variant(p);if(p&&v)choices[slot]={productId:p.id,variantId:v.id};picker.hidden=true;draw();return}if(event.target.closest('[data-picker-close]')){picker.hidden=true;return}const swatch=event.target.closest('[data-swatch]');if(swatch){const i=Number(swatch.dataset.swatch),p=product(choices[i]?.productId),v=variant(p,choices[i]?.variantId),values=[...(v?.options||[])];values[Number(swatch.dataset.option)]=swatch.dataset.value;const next=(p?.variants||[]).find(x=>x.available&&x.options.every((value,n)=>value===values[n]));if(next)choices[i].variantId=next.id;draw();return}if(event.target.closest('[data-add-button]'))addToCart()});search.addEventListener('input',show);document.addEventListener('keydown',event=>{if(event.key==='Escape')picker.hidden=true});choose(active)})();
 </script>
-
 {% schema %}
-{
-"name": "VsAps Volume Template",
-"target": "section",
-"settings": [
-{ "type": "product", "id": "product", "label": "Offer product", "autofill": true },
-{ "type": "text", "id": "heading", "label": "Heading", "default": "Buy more, save more" },
-{ "type": "text", "id": "subheading", "label": "Subheading", "default": "Choose a quantity offer below" },
-{ "type": "checkbox", "id": "show_variant_picker", "label": "Show variant picker", "default": true },
-{ "type": "checkbox", "id": "show_tier_2", "label": "Show offer 1", "default": true },
-{ "type": "number", "id": "tier_2_quantity", "label": "Offer 1 quantity", "default": 2 },
-{ "type": "select", "id": "tier_2_discount_type", "label": "Offer 1 saving type", "default": "percentage", "options": [{"value":"percentage","label":"Percentage"},{"value":"fixed","label":"Fixed amount per item"}] },
-{ "type": "number", "id": "tier_2_discount_value", "label": "Offer 1 saving value", "default": 5 },
-{ "type": "text", "id": "tier_2_label", "label": "Offer 1 label", "default": "Great for trying more" },
-{ "type": "checkbox", "id": "show_tier_3", "label": "Show offer 2", "default": true },
-{ "type": "number", "id": "tier_3_quantity", "label": "Offer 2 quantity", "default": 3 },
-{ "type": "select", "id": "tier_3_discount_type", "label": "Offer 2 saving type", "default": "percentage", "options": [{"value":"percentage","label":"Percentage"},{"value":"fixed","label":"Fixed amount per item"}] },
-{ "type": "number", "id": "tier_3_discount_value", "label": "Offer 2 saving value", "default": 10 },
-{ "type": "text", "id": "tier_3_label", "label": "Offer 2 label", "default": "Most popular" },
-{ "type": "checkbox", "id": "show_tier_4", "label": "Show offer 3", "default": true },
-{ "type": "number", "id": "tier_4_quantity", "label": "Offer 3 quantity", "default": 4 },
-{ "type": "select", "id": "tier_4_discount_type", "label": "Offer 3 saving type", "default": "percentage", "options": [{"value":"percentage","label":"Percentage"},{"value":"fixed","label":"Fixed amount per item"}] },
-{ "type": "number", "id": "tier_4_discount_value", "label": "Offer 3 saving value", "default": 15 },
-{ "type": "text", "id": "tier_4_label", "label": "Offer 3 label", "default": "Best value" },
-{ "type": "text", "id": "button_label", "label": "Button label", "default": "Add offer to cart" },
-{ "type": "select", "id": "button_action", "label": "After adding", "default": "checkout", "options": [{"value":"cart","label":"Open cart"},{"value":"checkout","label":"Go to checkout"},{"value":"custom","label":"Run custom checkout code"}] },
-{ "type": "textarea", "id": "custom_checkout_code", "label": "GoKwik / Shiprocket code", "info": "Runs after the selected quantity is added to Shopify cart. Paste only provider-approved storefront code; never include private API keys." },
-{ "type": "text", "id": "footer_note", "label": "Footer note", "default": "Your discount is applied automatically when your cart qualifies—no code required." },
-{ "type": "color", "id": "accent_color", "label": "Accent color", "default": "#047857" },
-{ "type": "color", "id": "background_color", "label": "Background color", "default": "#f8fafc" },
-{ "type": "color", "id": "text_color", "label": "Text color", "default": "#0f172a" }
-]
-}
+{"name":"Collection quantity offer","target":"section","settings":[
+{"type":"collection","id":"collection","label":"Offer collection","info":"The block appears only on product pages for products in this collection. Shoppers can mix its products and variants."},
+{"type":"text","id":"heading","label":"Heading","default":"Buy more, save more"},
+{"type":"number","id":"tier_2_quantity","label":"Offer 1 quantity","default":2},{"type":"number","id":"tier_2_discount_value","label":"Offer 1 percentage off","default":10},{"type":"text","id":"tier_2_label","label":"Offer 1 label","default":"Great for trying more"},
+{"type":"number","id":"tier_3_quantity","label":"Offer 2 quantity","default":4},{"type":"number","id":"tier_3_discount_value","label":"Offer 2 percentage off","default":20},{"type":"text","id":"tier_3_label","label":"Offer 2 label","default":"Best value"},
+{"type":"color","id":"accent_color","label":"Offer color","default":"#00865a"}]}
 {% endschema %}

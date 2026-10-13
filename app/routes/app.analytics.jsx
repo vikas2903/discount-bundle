@@ -76,14 +76,14 @@ export default function AnalyticsPage() {
   return (
     <s-page heading="Analytics">
       <div style={{ display: "grid", gap: "1rem" }}>
-        <p style={{ margin: 0, color: "#64748b" }}>
+        {/* <p style={{ margin: 0, color: "#64748b" }}>
           Last 30 days for {shop}. These numbers include only offers created in this app.
-        </p>
-        <s-banner tone="info">
+        </p> */}
+        {/* <s-banner tone="info">
           <s-paragraph>
             New and updated Shopify orders are recorded for more reliable reporting. If you use GoKwik, Shiprocket, or another checkout provider, it must sync the completed order and this app&apos;s discount to Shopify before the order can be attributed here.
           </s-paragraph>
-        </s-banner>
+        </s-banner> */}
         {loadError ? <s-banner tone="warning"><s-paragraph>{loadError}</s-paragraph></s-banner> : null}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "0.8rem" }}>
           <Metric label="Offers created" value={offers.length} detail={`${activeOffers} active offer${activeOffers === 1 ? "" : "s"}`} />

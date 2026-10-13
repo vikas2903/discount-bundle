@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { DEFAULT_BUNDLE_CONFIG } from "../../utils/bundle-discount";
+import { localDateTimeToIso } from "../../utils/date-time";
 
 export function BundleDiscountForm({ action = "create", collections, defaultValues, submitLabel, loading = false, error }) {
   const shopify = useAppBridge();
@@ -54,8 +55,8 @@ export function BundleDiscountForm({ action = "create", collections, defaultValu
     `}</style>
     <div className="bundle-builder">
       <input type="hidden" name="intent" value={action} />
-      <input type="hidden" name="startsAt" value={schedule[0] || ""} />
-      <input type="hidden" name="endsAt" value={schedule[1] || ""} />
+      <input type="hidden" name="startsAt" value={localDateTimeToIso(schedule[0])} />
+      <input type="hidden" name="endsAt" value={localDateTimeToIso(schedule[1])} />
       <input type="hidden" name="applicationMethod" value={application.method} />
       <input type="hidden" name="itemPriority" value={application.priority} />
       <input type="hidden" name="maxBundles" value={application.maxBundles || ""} />
@@ -89,7 +90,7 @@ export function BundleDiscountForm({ action = "create", collections, defaultValu
           {eligibility.productMode === "collections" ? <PickerSummary label="Collections" names={selectedCollections.map((item) => item.title)} action="Choose collections" onClick={async () => { const selected = await shopify.resourcePicker({type:"collection",action:"select",multiple:true,selectionIds:eligibility.selectedCollectionIds.map((id)=>({id}))}); if(selected) setEligibility({...eligibility,selectedCollectionIds:selected.map((item)=>item.id)}); }} /> : null}
           {eligibility.productMode === "products" ? <PickerSummary label="Products" names={eligibility.selectedProductIds} action="Choose products" onClick={async () => { const selected = await shopify.resourcePicker({type:"product",action:"select",multiple:true,selectionIds:eligibility.selectedProductIds.map((id)=>({id}))}); if(selected) setEligibility({...eligibility,selectedProductIds:selected.map((item)=>item.id)}); }} /> : null}
           <div className="bundle-grid"><Field label="Excluded product IDs"><textarea className="bundle-area" value={eligibility.excludedProductIds.join("\n")} onChange={(event) => setEligibility({...eligibility,excludedProductIds:splitIds(event.target.value)})} placeholder="gid://shopify/Product/123" /></Field><Field label="Customer segment IDs"><textarea className="bundle-area" disabled={eligibility.customerMode!=="segments"} value={eligibility.customerSegmentIds.join("\n")} onChange={(event) => setEligibility({...eligibility,customerSegmentIds:splitIds(event.target.value)})} placeholder="gid://shopify/Segment/123" /></Field><Field label="Minimum cart value"><input className="bundle-input" type="number" min="0" value={eligibility.minimumCartValue||""} onChange={(event) => setEligibility({...eligibility,minimumCartValue:event.target.value})}/></Field><Field label="Minimum eligible quantity"><input className="bundle-input" type="number" min="0" value={eligibility.minimumQuantity||""} onChange={(event) => setEligibility({...eligibility,minimumQuantity:event.target.value})}/></Field></div>
-          <label className="bundle-option"><input type="checkbox" checked={eligibility.newCustomersOnly} onChange={(event) => setEligibility({...eligibility,newCustomersOnly:event.target.checked})}/><span><strong>New customers only</strong><br/><small>Enforced only for signed-in customers with zero Shopify orders.</small></span></label><p className="bundle-note">Per-customer and total historical usage limits are not available for Shopify automatic app discounts, so they are deliberately not shown as selectable settings.</p>
+          <label className="bundle-option"><input type="checkbox" checked={eligibility.newCustomersOnly} onChange={(event) => setEligibility({...eligibility,newCustomersOnly:event.target.checked})}/><span><strong>New customers only</strong><br/><small>Only signed-in customers with zero Shopify orders qualify. Guest checkouts are not eligible.</small></span></label><p className="bundle-note">Per-customer and total historical usage limits are not available for Shopify automatic app discounts, so they are deliberately not shown as selectable settings.</p>
           {eligibility.selectedCollectionIds.map((id)=><input key={id} type="hidden" name="selectedCollectionIds" value={id}/>)}{eligibility.selectedProductIds.map((id)=><input key={id} type="hidden" name="selectedProductIds" value={id}/>)}{eligibility.excludedProductIds.map((id)=><input key={id} type="hidden" name="excludedProductIds" value={id}/>)}{eligibility.customerSegmentIds.map((id)=><input key={id} type="hidden" name="customerSegmentIds" value={id}/>)}
         </Card>
         <Card number="6" title="Schedule & storefront message" description="Set when the offer starts and ends, plus the message shoppers see after it is applied.">

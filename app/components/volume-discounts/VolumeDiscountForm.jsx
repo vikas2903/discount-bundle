@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { localDateTimeToIso } from "../../utils/date-time";
 
 export default function VolumeDiscountForm({
   fetcher,
@@ -120,12 +121,12 @@ export default function VolumeDiscountForm({
       <input
         type="hidden"
         name="startsAt"
-        value={scheduleRange[0] || ""}
+        value={localDateTimeToIso(scheduleRange[0])}
       />
       <input
         type="hidden"
         name="endsAt"
-        value={scheduleRange[1] || ""}
+        value={localDateTimeToIso(scheduleRange[1])}
       />
       <input type="hidden" name="config" value={JSON.stringify(form)} />
 
@@ -421,10 +422,10 @@ export default function VolumeDiscountForm({
         <s-box padding="base" borderWidth="base" borderRadius="base">
           <s-stack direction="block" gap="base">
             <s-heading>Eligible products &amp; customers</s-heading>
-            <s-paragraph>Product targeting is set above. This offer is available to all customers unless you limit it to new customers.</s-paragraph>
+            <s-paragraph>Product targeting is set above. New-customer offers require a signed-in customer Shopify identifies as having zero orders. Guest checkouts do not qualify because Shopify does not provide an order count.</s-paragraph>
             <label aria-label="New customers only" style={checkboxOptionStyle}>
               <input type="checkbox" checked={form.newCustomersOnly} onChange={(event) => updateField("newCustomersOnly", event.target.checked)} />
-              <span><strong>New customers only</strong><br /><span style={{ color: "#64748b", fontSize: "0.88rem" }}>Apply only when Shopify identifies the customer as having no previous orders.</span></span>
+              <span><strong>New customers only</strong><br /><span style={{ color: "#64748b", fontSize: "0.88rem" }}>Signed-in customers with zero Shopify orders qualify. Guest checkouts are not eligible.</span></span>
             </label>
           </s-stack>
         </s-box>

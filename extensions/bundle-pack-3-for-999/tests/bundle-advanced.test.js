@@ -80,5 +80,7 @@ describe("advanced bundle limits", () => {
     expect(run(excluded, [80, 70]).operations).toEqual([]);
     expect(run(minimum, [80, 70]).operations).toEqual([]);
     expect(run(newOnly, [80, 70], {orders: 1}).operations).toEqual([]);
+    expect(run(newOnly, [80, 70]).operations).toEqual([]);
+    expect(candidates(run(newOnly, [80, 70], {orders: 0}))).toHaveLength(1);
   });
 });

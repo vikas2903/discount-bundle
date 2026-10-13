@@ -20,6 +20,8 @@ import {
   parseVolumeConfig,
   validateVolumeConfig,
 } from "../utils/volume-discount";
+import { listBundleDiscounts } from "../services/bundle-discount.server";
+import { offerTargetsOverlap } from "../utils/offer-overlap";
 
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
@@ -109,7 +111,16 @@ export const action = async ({ request }) => {
     parseVolumeConfig(String(formData.get("config") || "{}")),
   );
   const validationErrors = validateVolumeConfig(config);
-  const { discounts: existingDiscounts } = await listVolumeDiscounts(admin);
+  const [{ discounts: existingDiscounts, graphqlErrors: volumeErrors }, { discounts: bundleDiscounts, graphqlErrors: bundleErrors }] =
+    await Promise.all([listVolumeDiscounts(admin), listBundleDiscounts(admin)]);
+  const discountLoadErrors = [...volumeErrors, ...bundleErrors];
+  if (discountLoadErrors.length > 0) {
+    return createActionError(
+      intent,
+      `Existing offers could not be checked for conflicts: ${discountLoadErrors.map(({ message }) => message).join(" | ")}`,
+      config,
+    );
+  }
   const subscription = await checkSubscription(billing);
   const editingDiscountId = String(formData.get("discountId") || "").trim();
   if (!subscription && intent === "create" && existingDiscounts.some((discount) => discount.status === "ACTIVE")) {
@@ -124,14 +135,19 @@ export const action = async ({ request }) => {
       return false;
     }
 
-    if (discount.config.mode === "legacy-product") {
-      return false;
-    }
-
-    return hasTargetOverlap(config, discount.config);
+    return offerTargetsOverlap(config, discount.config);
   });
+  const overlappingBundleDiscounts = bundleDiscounts.filter(
+    (discount) =>
+      discount.status === "ACTIVE" &&
+      offerTargetsOverlap(config, discount.config?.eligibility || discount.config),
+  );
 
-  if (validationErrors.length > 0 || overlappingDiscounts.length > 0) {
+  if (
+    validationErrors.length > 0 ||
+    overlappingDiscounts.length > 0 ||
+    overlappingBundleDiscounts.length > 0
+  ) {
     return {
       ok: false,
       action: intent,
@@ -144,6 +160,10 @@ export const action = async ({ request }) => {
         ...overlappingDiscounts.map((discount) => ({
           field: ["config"],
           message: `This discount overlaps with active volume discount "${discount.title}". Deactivate or change collections before saving.`,
+        })),
+        ...overlappingBundleDiscounts.map((discount) => ({
+          field: ["config"],
+          message: `This quantity offer overlaps with active bundle offer "${discount.title}". Deactivate or change targeting before saving.`,
         })),
       ],
       graphqlErrors: [],
@@ -240,9 +260,8 @@ function VolumeDiscountListPage() {
   const overlapWarnings = useMemo(() => {
     return discounts
       .filter((discount) => discount.discountId !== editingDiscountId)
-      .filter((discount) => discount.config.mode !== "legacy-product")
       .filter((discount) => discount.status === "ACTIVE")
-      .filter((discount) => hasTargetOverlap(form, discount.config))
+      .filter((discount) => offerTargetsOverlap(form, discount.config))
       .map((discount) => {
         const targets = getTargetSummary(discount.config, collectionTitleMap);
 
@@ -647,39 +666,9 @@ function toErrorMessage(error) {
   return String(error);
 }
 
-function hasTargetOverlap(leftConfig, rightConfig) {
-  const leftMode = getProductMode(leftConfig);
-  const rightMode = getProductMode(rightConfig);
-
-  if (leftMode === "all" || rightMode === "all") {
-    return true;
-  }
-
-  if (leftMode !== rightMode) {
-    // A selected product can belong to a selected collection. Without a full
-    // product-to-collection lookup, treat the mixed scope as potentially overlapping.
-    return true;
-  }
-
-  const key = leftMode === "products" ? "selectedProductIds" : "selectedCollectionIds";
-  const left = Array.isArray(leftConfig?.[key]) ? leftConfig[key] : [];
-  const right = Array.isArray(rightConfig?.[key]) ? rightConfig[key] : [];
-
-  return left.some((id) => right.includes(id));
-}
-
-function getProductMode(config) {
-  if (config?.productMode === "collections" || config?.productMode === "products") {
-    return config.productMode;
-  }
-
-  return Array.isArray(config?.selectedCollectionIds) && config.selectedCollectionIds.length > 0
-    ? "collections"
-    : "all";
-}
-
 function getTargetTypeLabel(config) {
-  const mode = getProductMode(config);
+  if (config?.mode === "legacy-product") return "Legacy product offer";
+  const mode = config?.productMode || (config?.selectedCollectionIds?.length ? "collections" : "all");
 
   if (mode === "collections") return "Selected collections";
   if (mode === "products") return "Selected products";
@@ -687,7 +676,11 @@ function getTargetTypeLabel(config) {
 }
 
 function getTargetSummary(config, collectionTitleMap) {
-  const mode = getProductMode(config);
+  if (config?.mode === "legacy-product") {
+    const count = config.legacyProducts?.length || 0;
+    return `${count} legacy targeted product${count === 1 ? "" : "s"}`;
+  }
+  const mode = config?.productMode || (config?.selectedCollectionIds?.length ? "collections" : "all");
 
   if (mode === "all") return "All products";
   if (mode === "products") {

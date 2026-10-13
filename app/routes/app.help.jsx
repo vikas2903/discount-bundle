@@ -142,7 +142,7 @@ export default function HelpPage() {
               "All products: every product can qualify.",
               "Selected collections: only products inside the collections you choose can qualify.",
               "Selected products: only the exact products you choose can qualify.",
-              "New customers only: apply only when Shopify identifies the shopper as having no earlier orders.",
+              "New customers only: only signed-in customers Shopify identifies as having zero orders qualify. Guest checkouts are not eligible because Shopify does not provide their order count.",
               "Free plan: one active quantity offer. Pro: unlimited quantity offers and access to bundle offers.",
             ]} />
             <FeatureGroup title="Limits and important behavior" items={[
@@ -150,7 +150,7 @@ export default function HelpPage() {
               "Item priority: when applications are limited, choose whether the cheapest or most expensive qualifying lines receive the saving first.",
               "Discount combinations: choose whether product, order, or shipping discounts can combine with this offer.",
               "The product must match targeting and meet the quantity tier. Product attributes do not activate this discount.",
-              "Only one active quantity offer can cover the same targeting scope at a time, preventing conflicting savings.",
+              "Only one active quantity offer can cover the same targeting scope at a time. Active bundle offers are also checked, and overlapping offers cannot be saved.",
             ]} />
           </div>
           <s-link href={volumeDiscountsHref}>Open Quantity offers</s-link>
