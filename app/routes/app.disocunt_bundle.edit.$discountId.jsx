@@ -69,6 +69,7 @@ export const action = async ({ request, params }) => {
       const result = await toggleBundleDiscountStatus(admin, {
         id: params.discountId,
         nextStatus,
+        redemptionMethod: formData.get("redemptionMethod") === "code" ? "code" : "automatic",
       });
 
       if (result.ok) {
@@ -121,6 +122,19 @@ export const action = async ({ request, params }) => {
       Number(existing.discount?.config?.version) < 2
         ? { ...config, version: 1 }
         : config;
+    // Shopify creates automatic and code discounts as different resources.
+    // Keep an existing offer on its original redemption path when it is edited.
+    configToSave.redemption = {
+      ...configToSave.redemption,
+      method:
+        existing.discount?.config?.redemption?.method === "code"
+          ? "code"
+          : "automatic",
+      code:
+        existing.discount?.config?.redemption?.method === "code"
+          ? configToSave.redemption?.code || existing.discount?.config?.redemption?.code || ""
+          : "",
+    };
     const result = await updateBundleDiscount(admin, {
       id: params.discountId,
       title: formData.get("title"),
@@ -181,6 +195,11 @@ export default function EditBundleDiscountPage() {
                 type="hidden"
                 name="nextStatus"
                 value={isActive ? "disable" : "enable"}
+              />
+              <input
+                type="hidden"
+                name="redemptionMethod"
+                value={discount.config.redemption?.method === "code" ? "code" : "automatic"}
               />
               <button
                 className="bundle-button"

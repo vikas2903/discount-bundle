@@ -1,6 +1,8 @@
 import { getBundleCollections } from "./bundle-discount.server";
+import { validateDiscountCode } from "./discount-code.server";
 import {
   DEFAULT_VOLUME_FUNCTION_HANDLE,
+  formatVolumeCodeDiscountInput,
   formatVolumeDiscountInput,
   parseVolumeConfig,
   VOLUME_METAFIELD_KEY,
@@ -56,7 +58,7 @@ export async function listVolumeDiscounts(admin) {
       query ExistingVolumeDiscounts {
         discountNodes(
           first: 100
-          query: "method:automatic type:app"
+          query: "type:app"
           sortKey: UPDATED_AT
           reverse: true
         ) {
@@ -77,6 +79,14 @@ export async function listVolumeDiscounts(admin) {
                   startsAt
                   endsAt
                 }
+                ... on DiscountCodeApp {
+                  discountId
+                  title
+                  status
+                  startsAt
+                  endsAt
+                  codes(first: 1) { nodes { code } }
+                }
               }
             }
           }
@@ -90,21 +100,27 @@ export async function listVolumeDiscounts(admin) {
       responseJson.data?.discountNodes?.edges
         ?.map(({ node }) => {
           const configValue = node.metafield?.value;
-          const automaticDiscount = node.discount;
+          const appDiscount = node.discount;
 
-          if (!configValue || !automaticDiscount?.discountId) {
+          if (!configValue || !appDiscount?.discountId) {
             return null;
           }
 
           return {
-            nodeId: automaticDiscount.discountId,
+            nodeId: appDiscount.discountId,
             adminGraphqlNodeId: node.id,
-            discountId: automaticDiscount.discountId,
-            title: automaticDiscount.title,
-            status: automaticDiscount.status,
-            startsAt: automaticDiscount.startsAt,
-            endsAt: automaticDiscount.endsAt,
-            config: parseVolumeConfig(configValue),
+            discountId: appDiscount.discountId,
+            title: appDiscount.title,
+            status: appDiscount.status,
+            startsAt: appDiscount.startsAt,
+            endsAt: appDiscount.endsAt,
+            config: {
+              ...parseVolumeConfig(configValue),
+              redemption: {
+                method: appDiscount.codes ? "code" : "automatic",
+                code: appDiscount.codes?.nodes?.[0]?.code || "",
+              },
+            },
           };
         })
         .filter(Boolean) || [],
@@ -116,6 +132,9 @@ export async function createVolumeDiscount(
   admin,
   { title, startsAt, endsAt, functionHandle, config },
 ) {
+  if (config.redemption?.method === "code") {
+    return createVolumeCodeDiscount(admin, { title, startsAt, endsAt, functionHandle, config });
+  }
   const response = await admin.graphql(
     `#graphql
       mutation CreateVolumeDiscount($automaticAppDiscount: DiscountAutomaticAppInput!) {
@@ -188,6 +207,9 @@ export async function updateVolumeDiscount(
   admin,
   { id, title, startsAt, endsAt, functionHandle, config },
 ) {
+  if (config.redemption?.method === "code") {
+    return updateVolumeCodeDiscount(admin, { id, title, startsAt, endsAt, functionHandle, config });
+  }
   const response = await admin.graphql(
     `#graphql
       mutation UpdateVolumeDiscount(
@@ -237,7 +259,10 @@ export async function updateVolumeDiscount(
   };
 }
 
-export async function toggleVolumeDiscountStatus(admin, { id, nextStatus }) {
+export async function toggleVolumeDiscountStatus(admin, { id, nextStatus, redemptionMethod = "automatic" }) {
+  if (redemptionMethod === "code") {
+    return toggleVolumeCodeDiscountStatus(admin, { id, nextStatus });
+  }
   const mutationName =
     nextStatus === "disable"
       ? "discountAutomaticDeactivate"
@@ -279,7 +304,10 @@ export async function toggleVolumeDiscountStatus(admin, { id, nextStatus }) {
   };
 }
 
-export async function deleteVolumeDiscount(admin, id) {
+export async function deleteVolumeDiscount(admin, id, redemptionMethod = "automatic") {
+  if (redemptionMethod === "code") {
+    return deleteVolumeCodeDiscount(admin, id);
+  }
   const response = await admin.graphql(
     `#graphql
       mutation DeleteVolumeDiscount($id: ID!) {
@@ -301,6 +329,113 @@ export async function deleteVolumeDiscount(admin, id) {
       (payload?.userErrors || []).length === 0 &&
       Boolean(payload?.deletedAutomaticDiscountId),
     deletedAutomaticDiscountId: payload?.deletedAutomaticDiscountId || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+}
+
+async function createVolumeCodeDiscount(admin, { title, startsAt, endsAt, functionHandle, config }) {
+  const codeCheck = await validateDiscountCode(admin, config.redemption?.code);
+  if (!codeCheck.ok) {
+    return { ok: false, discount: null, ...codeCheck };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation CreateVolumeCodeDiscount($codeAppDiscount: DiscountCodeAppInput!) {
+        discountCodeAppCreate(codeAppDiscount: $codeAppDiscount) {
+          codeAppDiscount { discountId title status startsAt endsAt codes(first: 1) { nodes { code } } }
+          userErrors { field message }
+        }
+      }`,
+    { variables: { codeAppDiscount: formatVolumeCodeDiscountInput({ title, startsAt, endsAt, functionHandle, config }) } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeAppCreate;
+  const result = {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.codeAppDiscount),
+    discount: payload?.codeAppDiscount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+
+  if (result.ok && config.status !== "ACTIVE") {
+    const deactivation = await toggleVolumeCodeDiscountStatus(admin, {
+      id: result.discount.discountId,
+      nextStatus: "disable",
+    });
+    if (!deactivation.ok) {
+      return { ...result, ok: false, userErrors: deactivation.userErrors, graphqlErrors: deactivation.graphqlErrors };
+    }
+    return { ...result, discount: deactivation.discount || result.discount, nextStatus: "disable" };
+  }
+
+  return result;
+}
+
+async function updateVolumeCodeDiscount(admin, { id, title, startsAt, endsAt, functionHandle, config }) {
+  const codeCheck = await validateDiscountCode(admin, config.redemption?.code, id);
+  if (!codeCheck.ok) {
+    return { ok: false, discount: null, ...codeCheck };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation UpdateVolumeCodeDiscount($id: ID!, $codeAppDiscount: DiscountCodeAppInput!) {
+        discountCodeAppUpdate(id: $id, codeAppDiscount: $codeAppDiscount) {
+          codeAppDiscount { discountId title status startsAt endsAt codes(first: 1) { nodes { code } } }
+          userErrors { field message }
+        }
+      }`,
+    { variables: { id, codeAppDiscount: formatVolumeCodeDiscountInput({ title, startsAt, endsAt, functionHandle, config }) } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeAppUpdate;
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.codeAppDiscount),
+    discount: payload?.codeAppDiscount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+}
+
+async function toggleVolumeCodeDiscountStatus(admin, { id, nextStatus }) {
+  const mutationName = nextStatus === "disable" ? "discountCodeDeactivate" : "discountCodeActivate";
+  const response = await admin.graphql(
+    `#graphql
+      mutation ToggleVolumeCodeDiscount($id: ID!) {
+        ${mutationName}(id: $id) {
+          codeDiscountNode { codeDiscount { ... on DiscountCodeApp { discountId title status startsAt endsAt } } }
+          userErrors { field message }
+        }
+      }`,
+    { variables: { id } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.[mutationName];
+  const discount = payload?.codeDiscountNode?.codeDiscount;
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(discount),
+    discount: discount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+    nextStatus,
+  };
+}
+
+async function deleteVolumeCodeDiscount(admin, id) {
+  const response = await admin.graphql(
+    `#graphql
+      mutation DeleteVolumeCodeDiscount($id: ID!) {
+        discountCodeDelete(id: $id) { deletedCodeDiscountId userErrors { field message } }
+      }`,
+    { variables: { id } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeDelete;
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.deletedCodeDiscountId),
+    deletedCodeDiscountId: payload?.deletedCodeDiscountId || null,
     userErrors: payload?.userErrors || [],
     graphqlErrors: responseJson.errors || [],
   };

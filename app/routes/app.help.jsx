@@ -3,7 +3,7 @@ import { useLoaderData, useLocation } from "react-router";
 import { authenticate } from "../shopify.server";
 import { checkSubscription, getPlanDetails } from "../utils/billing.server";
 
-const DEFAULT_SUPPORT_EMAIL = "vikasprasad2903@gmail.com";
+const DEFAULT_SUPPORT_EMAIL = "vsapps.tech@gmail.com";
 
 export const loader = async ({ request }) => {
   const { billing, session } = await authenticate.admin(request);

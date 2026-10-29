@@ -73,6 +73,16 @@ describe("advanced bundle limits", () => {
     expect(candidates(free)[0].value.percentage.value).toBe("100.00");
   });
 
+  test("a percentage tier can discount one eligible product", () => {
+    const result = run(
+      { ...baseConfig, bundleTiers: [{ quantity: 1, discountType: "percentage", value: 10 }] },
+      [80],
+    );
+    expect(candidates(result)).toHaveLength(1);
+    expect(candidates(result)[0].value.percentage.value).toBe("10.00");
+    expect(candidates(result)[0].targets[0].cartLine.quantity).toBe(1);
+  });
+
   test("product inclusion, exclusions, cart minimum and new-customer checks are enforced", () => {
     const excluded = {...baseConfig, eligibility: {...baseConfig.eligibility, excludedProductIds: ["product-0"]}};
     const minimum = {...baseConfig, eligibility: {...baseConfig.eligibility, minimumCartValue: 999}};

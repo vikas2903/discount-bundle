@@ -3,6 +3,7 @@ export const BUNDLE_METAFIELD_KEY = "function-configuration";
 export const DEFAULT_FUNCTION_HANDLE = "bundle-pack-3-for-999";
 export const DEFAULT_BUNDLE_CONFIG = {
   version: 2, discountType: "bundle",
+  redemption: { method: "automatic", code: "" },
   bundleTiers: [{ quantity: 2, freeQuantity: 0, discountType: "fixed_price", value: 799, maxBundles: 0 }],
   application: { method: "once", maxBundles: 1, maxDiscountedItems: 0, priority: "cheapest" },
   eligibility: { productMode: "all", selectedCollectionIds: [], selectedProductIds: [], excludedProductIds: [], minimumCartValue: 0, minimumQuantity: 0, customerMode: "all", customerSegmentIds: [], newCustomersOnly: false },
@@ -13,6 +14,17 @@ export const DEFAULT_BUNDLE_CONFIG = {
 
 export function parseCollectionIds(value) { return parseGids(value, "Collection"); }
 export function parseBundleConfig(value) { try { return normalize(JSON.parse(value)); } catch { return cloneDefault(); } }
+// A volume offer used to write a small compatibility metafield in the bundle
+// namespace. Do not treat that as a bundle offer just because normalization
+// supplies default bundle tiers.
+export function isBundleConfigValue(value) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed?.bundleTiers) && parsed.bundleTiers.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 export function buildBundleConfig(formData) {
   const collections = parseGids(formData.getAll("selectedCollectionIds"), "Collection");
@@ -26,9 +38,11 @@ export function buildBundleConfig(formData) {
   })), []);
   const mode = ["all", "collections", "products"].includes(formData.get("productMode")) ? formData.get("productMode") : "all";
   const method = ["once", "repeat", "limit_bundles", "limit_items"].includes(formData.get("applicationMethod")) ? formData.get("applicationMethod") : "once";
+  const redemptionMethod = formData.get("redemptionMethod") === "code" ? "code" : "automatic";
   return {
     config: normalize({
       version: 2, bundleTiers: tiers,
+      redemption: { method: redemptionMethod, code: String(formData.get("discountCode") || "").trim() },
       application: { method, maxBundles: formData.get("maxBundles"), maxDiscountedItems: formData.get("maxDiscountedItems"), priority: formData.get("itemPriority") },
       eligibility: { productMode: mode, selectedCollectionIds: collections.ids, selectedProductIds: products.ids, excludedProductIds: excluded.ids, minimumCartValue: formData.get("minimumCartValue"), minimumQuantity: formData.get("minimumQuantity"), customerMode: formData.get("customerMode"), customerSegmentIds: segments.ids, newCustomersOnly: formData.get("newCustomersOnly") === "true" },
       combinations: { productDiscounts: formData.get("combineProductDiscounts") === "true", orderDiscounts: formData.get("combineOrderDiscounts") === "true", shippingDiscounts: formData.get("combineShippingDiscounts") === "true" },
@@ -41,7 +55,7 @@ export function buildBundleConfig(formData) {
 export function validateBundleConfig(config, rawTierCount = 0) {
   const errors = []; const tiers = config.bundleTiers;
   if (!rawTierCount || !tiers.length) errors.push("Add at least one bundle quantity tier.");
-  if (tiers.some((tier) => tier.quantity < 2)) errors.push("Bundle quantity must be 2 or more.");
+  if (tiers.some((tier) => tier.quantity < (tier.discountType === "percentage" ? 1 : 2))) errors.push("Percentage-off offers can apply to 1 item; fixed-price and Buy X Get Y offers need 2 or more items.");
   if (tiers.some((tier) => tier.discountType === "free" && tier.freeQuantity < 1)) errors.push("Buy X get Y free tiers need at least one free item.");
   if (tiers.some((tier) => tier.discountType !== "free" && tier.value <= 0)) errors.push("Each fixed-price or percentage tier needs a value greater than 0.");
   if (tiers.some((tier) => tier.discountType === "percentage" && tier.value > 100)) errors.push("Percentage off cannot be more than 100%.");
@@ -51,6 +65,7 @@ export function validateBundleConfig(config, rawTierCount = 0) {
   if (config.eligibility.productMode === "collections" && !config.eligibility.selectedCollectionIds.length) errors.push("Choose at least one collection.");
   if (config.eligibility.productMode === "products" && !config.eligibility.selectedProductIds.length) errors.push("Choose at least one product.");
   if (config.eligibility.customerMode === "segments" && !config.eligibility.customerSegmentIds.length) errors.push("Enter at least one customer segment ID.");
+  if (config.redemption?.method === "code" && !config.redemption.code) errors.push("Enter a discount code for this coupon offer.");
   return errors;
 }
 
@@ -68,6 +83,15 @@ export function formatBundleDiscountInput({ title, startsAt, endsAt, functionHan
   };
 }
 
+export function formatBundleCodeDiscountInput(options) {
+  const input = formatBundleDiscountInput(options);
+
+  return {
+    ...input,
+    code: String(options.config?.redemption?.code || "").trim(),
+  };
+}
+
 export function isBundleConfig(config) { return Array.isArray(config?.bundleTiers) && config.bundleTiers.length > 0; }
 export function toIsoDateTime(value) { const parsed = new Date(String(value || "").trim()); return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString(); }
 export function toErrorMessage(error) { return error instanceof Error ? error.message : String(error); }
@@ -76,7 +100,9 @@ function normalize(source = {}) {
   const base = cloneDefault(); const legacyCollections = ids(source.selectedCollectionIds);
   const raw = source.eligibility || {}; const productMode = ["collections", "products"].includes(raw.productMode) ? raw.productMode : legacyCollections.length ? "collections" : "all";
   const config = {
-    ...base, version: Number(source.version) >= 2 ? 2 : 1, bundleTiers: normalizeTiers(source.bundleTiers, base.bundleTiers),
+    ...base, version: Number(source.version) >= 2 ? 2 : 1,
+    redemption: { method: source.redemption?.method === "code" ? "code" : "automatic", code: string(source.redemption?.code) },
+    bundleTiers: normalizeTiers(source.bundleTiers, base.bundleTiers),
     application: { method: ["once", "repeat", "limit_bundles", "limit_items"].includes(source.application?.method) ? source.application.method : "once", maxBundles: integer(source.application?.maxBundles, source.application?.method === "once" ? 1 : 0), maxDiscountedItems: integer(source.application?.maxDiscountedItems, 0), priority: source.application?.priority === "most_expensive" ? "most_expensive" : "cheapest" },
     eligibility: { productMode, selectedCollectionIds: ids(raw.selectedCollectionIds ?? legacyCollections), selectedProductIds: ids(raw.selectedProductIds), excludedProductIds: ids(raw.excludedProductIds), minimumCartValue: number(raw.minimumCartValue, 0), minimumQuantity: integer(raw.minimumQuantity, 0), customerMode: raw.customerMode === "segments" ? "segments" : "all", customerSegmentIds: ids(raw.customerSegmentIds), newCustomersOnly: Boolean(raw.newCustomersOnly) },
     combinations: { productDiscounts: Boolean(source.combinations?.productDiscounts), orderDiscounts: Boolean(source.combinations?.orderDiscounts), shippingDiscounts: Boolean(source.combinations?.shippingDiscounts) },
@@ -88,7 +114,7 @@ function cloneDefault() { return JSON.parse(JSON.stringify(DEFAULT_BUNDLE_CONFIG
 function parseGids(value, resource) { const invalid = []; const valid = rawValues(value).map((id) => { if (/^\d+$/.test(id)) return `gid://shopify/${resource}/${id}`; if (new RegExp(`^gid://shopify/${resource}/\\d+$`).test(id)) return id; invalid.push(id); return null; }).filter(Boolean); return { ids: [...new Set(valid)], invalid }; }
 function rawValues(value) { return (Array.isArray(value) ? value : [value]).flatMap((item) => String(item || "").split(/[\n,]+/)).map((item) => item.trim()).filter(Boolean); }
 function ids(value) { return [...new Set(rawValues(value))]; }
-function normalizeTiers(value, fallback) { const used = new Set(); const result = (Array.isArray(value) ? value : []).map((tier) => ({ quantity: integer(tier?.quantity, 0), freeQuantity: integer(tier?.freeQuantity, 0), discountType: ["percentage", "free"].includes(tier?.discountType) ? tier.discountType : "fixed_price", value: number(tier?.value ?? tier?.price, 0), maxBundles: integer(tier?.maxBundles, 0) })).filter((tier) => tier.quantity >= 2 && (tier.discountType === "free" ? tier.freeQuantity > 0 : tier.value > 0)).filter((tier) => !used.has(tier.quantity) && used.add(tier.quantity)); return result.length ? result : fallback; }
+function normalizeTiers(value, fallback) { const used = new Set(); const result = (Array.isArray(value) ? value : []).map((tier) => ({ quantity: integer(tier?.quantity, 0), freeQuantity: integer(tier?.freeQuantity, 0), discountType: ["percentage", "free"].includes(tier?.discountType) ? tier.discountType : "fixed_price", value: number(tier?.value ?? tier?.price, 0), maxBundles: integer(tier?.maxBundles, 0) })).filter((tier) => tier.quantity >= (tier.discountType === "percentage" ? 1 : 2) && (tier.discountType === "free" ? tier.freeQuantity > 0 : tier.value > 0)).filter((tier) => !used.has(tier.quantity) && used.add(tier.quantity)); return result.length ? result : fallback; }
 function string(value) { return typeof value === "string" ? value.trim() : ""; }
 function integer(value, fallback) { const result = Number(value); return Number.isInteger(result) && result >= 0 ? result : fallback; }
 function number(value, fallback) { const result = Number(value); return Number.isFinite(result) && result >= 0 ? result : fallback; }

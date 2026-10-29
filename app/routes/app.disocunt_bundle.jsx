@@ -54,6 +54,7 @@ export const action = async ({ request }) => {
   if (intent === "toggle-status") {
     const discountNodeId = String(formData.get("discountNodeId") || "").trim();
     const nextStatus = String(formData.get("nextStatus") || "").trim();
+    const redemptionMethod = formData.get("redemptionMethod") === "code" ? "code" : "automatic";
 
     if (!discountNodeId || !["enable", "disable"].includes(nextStatus)) {
       return {
@@ -74,6 +75,7 @@ export const action = async ({ request }) => {
         ...(await toggleBundleDiscountStatus(admin, {
           id: discountNodeId,
           nextStatus,
+          redemptionMethod,
         })),
         action: intent,
       };
@@ -90,6 +92,7 @@ export const action = async ({ request }) => {
 
   if (intent === "delete") {
     const discountNodeId = String(formData.get("discountNodeId") || "").trim();
+    const redemptionMethod = formData.get("redemptionMethod") === "code" ? "code" : "automatic";
 
     if (!discountNodeId) {
       return {
@@ -107,7 +110,7 @@ export const action = async ({ request }) => {
 
     try {
       return {
-        ...(await deleteBundleDiscount(admin, discountNodeId)),
+        ...(await deleteBundleDiscount(admin, discountNodeId, redemptionMethod)),
         action: intent,
       };
     } catch (error) {
@@ -200,13 +203,13 @@ function DiscountBundleListPage() {
       <div style={{ display: "grid", gap: "1.5rem" }}>
         <div style={heroStyle}>
           <div style={{ display: "grid", gap: "0.45rem", maxWidth: "44rem" }}>
-            <div style={eyebrowStyle}>Automatic discounts</div>
+            <div style={eyebrowStyle}>Automatic discounts & coupon codes</div>
             <h1 style={{ margin: 0, fontSize: "clamp(1.6rem, 3vw, 2.1rem)", fontWeight: 750 }}>
               Bundle offers
             </h1>
             <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
               Build mix-and-match offers, schedule their start time, and let Shopify
-              apply them automatically when a cart qualifies—no discount code required.
+              apply them automatically when a cart qualifies, or require a coupon code at checkout.
             </p>
           </div>
           <button
@@ -271,7 +274,7 @@ function DiscountBundleListPage() {
               >
                 <thead>
                   <tr>
-                    {["", "Name", "Discount", "Status", "Type", ""].map(
+                    {["", "Name", "Discount", "Redemption", "Status", "Type", ""].map(
                       (heading, index) => (
                         <th key={`${heading}-${index}`} style={headerCellStyle}>
                           {heading === "" ? (
@@ -317,6 +320,14 @@ function DiscountBundleListPage() {
                         discountCollectionTitles.length > 0
                           ? "Mix and match"
                           : "Store-wide";
+                      const redemptionMethod =
+                        discount.config.redemption?.method === "code"
+                          ? "code"
+                          : "automatic";
+                      const redemptionLabel =
+                        redemptionMethod === "code"
+                          ? `Code: ${discount.config.redemption?.code || "—"}`
+                          : "Automatic";
 
                       return (
                         <tr key={discount.nodeId}>
@@ -325,6 +336,7 @@ function DiscountBundleListPage() {
                           </td>
                           <td style={bodyCellStyle}>{discount.title}</td>
                           <td style={bodyCellStyle}>{discountLabel}</td>
+                          <td style={bodyCellStyle}>{redemptionLabel}</td>
                           <td style={bodyCellStyle}>
                             <span
                               style={{
@@ -372,6 +384,7 @@ function DiscountBundleListPage() {
                                   name="nextStatus"
                                   value={isActive ? "disable" : "enable"}
                                 />
+                                <input type="hidden" name="redemptionMethod" value={redemptionMethod} />
                                 <button
                                   type="submit"
                                   style={rowIconButtonStyle}
@@ -390,6 +403,7 @@ function DiscountBundleListPage() {
                                   name="discountNodeId"
                                   value={discount.nodeId}
                                 />
+                                <input type="hidden" name="redemptionMethod" value={redemptionMethod} />
                                 <button
                                   type="submit"
                                   style={rowIconButtonStyle}
@@ -408,7 +422,7 @@ function DiscountBundleListPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} style={emptyStateCellStyle}>
+                      <td colSpan={7} style={emptyStateCellStyle}>
                         No bundle discounts found in this tab.
                       </td>
                     </tr>

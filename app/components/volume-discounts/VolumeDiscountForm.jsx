@@ -24,6 +24,7 @@ export default function VolumeDiscountForm({
   const selectedCollectionIds = form.selectedCollectionIds;
   const selectedProductIds = form.selectedProductIds;
   const productMode = form.productMode || "all";
+  const redemption = form.redemption || { method: "automatic", code: "" };
   const selectedCollectionTitles = useMemo(() => {
     const selectedSet = new Set(selectedCollectionIds);
 
@@ -149,10 +150,62 @@ export default function VolumeDiscountForm({
 
         <s-text-field
           label="Cart message"
-          helpText="Shown with the automatic discount in the cart or at checkout. This is not a coupon code."
+          helpText="Shown with the discount in the cart or at checkout."
           value={form.message}
           onInput={(event) => updateField("message", getEventValue(event))}
         />
+
+        <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+          <s-stack direction="block" gap="tight">
+            <s-heading>How shoppers redeem this offer</s-heading>
+            <div style={targetingOptionsStyle}>
+              {[
+                ["automatic", "Automatic discount", "Shopify applies the saving when the cart qualifies."],
+                ["code", "Coupon code", "Shoppers enter a code at checkout."],
+              ].map(([method, label, detail]) => (
+                <label
+                  key={method}
+                  htmlFor={`volume-redemption-${method}`}
+                  aria-label={label}
+                  style={{
+                    ...targetOptionStyle,
+                    ...(redemption.method === method ? selectedTargetOptionStyle : {}),
+                    ...(isEditing ? { cursor: "not-allowed", opacity: 0.7 } : {}),
+                  }}
+                >
+                  <input
+                    id={`volume-redemption-${method}`}
+                    type="radio"
+                    name="volume-redemption"
+                    checked={redemption.method === method}
+                    disabled={isEditing}
+                    onChange={() => updateField("redemption", { ...redemption, method })}
+                  />
+                  <span style={{ display: "grid", gap: "0.2rem" }}>
+                    <strong>{label}</strong>
+                    <span style={{ color: "#64748b", fontSize: "0.88rem" }}>
+                      {isEditing ? `${detail} The redemption method cannot be changed after creation.` : detail}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {redemption.method === "code" ? (
+              <s-text-field
+                label="Coupon code"
+                helpText="Customers must enter this code to receive the quantity saving."
+                value={redemption.code}
+                onInput={(event) =>
+                  updateField("redemption", {
+                    ...redemption,
+                    code: getEventValue(event).toUpperCase(),
+                  })
+                }
+                required
+              />
+            ) : null}
+          </s-stack>
+        </s-box>
 
         {!isEditing ? (
           <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">

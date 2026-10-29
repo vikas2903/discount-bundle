@@ -64,6 +64,7 @@ export const action = async ({ request }) => {
   if (intent === "toggle-status") {
     const discountId = String(formData.get("discountId") || "").trim();
     const nextStatus = String(formData.get("nextStatus") || "").trim();
+    const redemptionMethod = formData.get("redemptionMethod") === "code" ? "code" : "automatic";
 
     if (!discountId || !["enable", "disable"].includes(nextStatus)) {
       return createActionError(
@@ -77,6 +78,7 @@ export const action = async ({ request }) => {
         ...(await toggleVolumeDiscountStatus(admin, {
           id: discountId,
           nextStatus,
+          redemptionMethod,
         })),
         action: intent,
       };
@@ -88,6 +90,7 @@ export const action = async ({ request }) => {
 
   if (intent === "delete") {
     const discountId = String(formData.get("discountId") || "").trim();
+    const redemptionMethod = formData.get("redemptionMethod") === "code" ? "code" : "automatic";
 
     if (!discountId) {
       return createActionError(
@@ -98,7 +101,7 @@ export const action = async ({ request }) => {
 
     try {
       return {
-        ...(await deleteVolumeDiscount(admin, discountId)),
+        ...(await deleteVolumeDiscount(admin, discountId, redemptionMethod)),
         action: intent,
       };
     } catch (error) {
@@ -110,7 +113,7 @@ export const action = async ({ request }) => {
   const config = normalizeVolumeConfig(
     parseVolumeConfig(String(formData.get("config") || "{}")),
   );
-  const validationErrors = validateVolumeConfig(config);
+  let validationErrors = validateVolumeConfig(config);
   const [{ discounts: existingDiscounts, graphqlErrors: volumeErrors }, { discounts: bundleDiscounts, graphqlErrors: bundleErrors }] =
     await Promise.all([listVolumeDiscounts(admin), listBundleDiscounts(admin)]);
   const discountLoadErrors = [...volumeErrors, ...bundleErrors];
@@ -123,6 +126,22 @@ export const action = async ({ request }) => {
   }
   const subscription = await checkSubscription(billing);
   const editingDiscountId = String(formData.get("discountId") || "").trim();
+  if (intent === "update") {
+    const existingDiscount = existingDiscounts.find(
+      (discount) => discount.discountId === editingDiscountId,
+    );
+    const existingMethod =
+      existingDiscount?.config?.redemption?.method === "code" ? "code" : "automatic";
+    config.redemption = {
+      ...config.redemption,
+      method: existingMethod,
+      code:
+        existingMethod === "code"
+          ? config.redemption?.code || existingDiscount?.config?.redemption?.code || ""
+          : "",
+    };
+    validationErrors = validateVolumeConfig(config);
+  }
   if (!subscription && intent === "create" && existingDiscounts.some((discount) => discount.status === "ACTIVE")) {
     return createActionError(intent, "The Free plan includes one active quantity offer. Upgrade to Pro for unlimited offers.", config);
   }
@@ -364,7 +383,7 @@ function VolumeDiscountListPage() {
       <div style={{ ...fullWidthStyle, display: "grid", gap: "1.5rem" }}>
         <div style={heroStyle}>
           <div style={{ display: "grid", gap: "0.5rem", maxWidth: "45rem" }}>
-            <div style={eyebrowStyle}>Automatic discounts</div>
+            <div style={eyebrowStyle}>Automatic discounts & coupon codes</div>
             <h1 style={{ margin: 0, fontSize: "clamp(1.6rem, 3vw, 2.1rem)", fontWeight: 750 }}>
               Quantity-based offers
             </h1>
@@ -474,7 +493,7 @@ function VolumeDiscountListPage() {
             >
               <thead>
                 <tr>
-                  {["", "Name", "Discount", "Status", "Type", ""].map(
+                  {["", "Name", "Discount", "Redemption", "Status", "Type", ""].map(
                     (heading, index) => (
                       <th key={`${heading}-${index}`} style={headerCellStyle}>
                         {heading === "" ? (index === 0 ? <input type="checkbox" disabled /> : null) : heading}
@@ -506,6 +525,12 @@ function VolumeDiscountListPage() {
                       ? `${leadTier.minQty} items -> ${leadTier.discountValue}${leadTier.discountType === "fixed" ? " off each" : "% off"}`
                       : "Legacy product rules";
                     const typeLabel = getTargetTypeLabel(discount.config);
+                    const redemptionMethod =
+                      discount.config.redemption?.method === "code" ? "code" : "automatic";
+                    const redemptionLabel =
+                      redemptionMethod === "code"
+                        ? `Code: ${discount.config.redemption?.code || "—"}`
+                        : "Automatic";
 
                     return (
                       <tr key={discount.discountId}>
@@ -514,6 +539,7 @@ function VolumeDiscountListPage() {
                         </td>
                         <td style={bodyCellStyle}>{discount.title}</td>
                         <td style={bodyCellStyle}>{discountLabel}</td>
+                        <td style={bodyCellStyle}>{redemptionLabel}</td>
                         <td style={bodyCellStyle}>
                           <span
                             style={{
@@ -558,6 +584,7 @@ function VolumeDiscountListPage() {
                                 name="nextStatus"
                                 value={isActive ? "disable" : "enable"}
                               />
+                              <input type="hidden" name="redemptionMethod" value={redemptionMethod} />
                               <button
                                 type="submit"
                                 style={rowIconButtonStyle}
@@ -576,6 +603,7 @@ function VolumeDiscountListPage() {
                                 name="discountId"
                                 value={discount.discountId}
                               />
+                              <input type="hidden" name="redemptionMethod" value={redemptionMethod} />
                               <button
                                 type="submit"
                                 style={rowIconButtonStyle}
@@ -594,7 +622,7 @@ function VolumeDiscountListPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} style={emptyStateCellStyle}>
+                    <td colSpan={7} style={emptyStateCellStyle}>
                       <div style={{ display: "grid", gap: "0.45rem", justifyItems: "center" }}>
                         <strong>No quantity offers found in this view.</strong>
                         <span>Create an offer to give shoppers a reason to add more items.</span>

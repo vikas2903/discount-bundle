@@ -5,7 +5,7 @@ import { authenticate } from "../shopify.server";
 import { listBundleDiscounts } from "../services/bundle-discount.server";
 import { listVolumeDiscounts } from "../services/volume-discount.server";
 
-const SUPPORT_EMAIL = "vikasprasad2903@gmail.com";
+const SUPPORT_EMAIL = "vsapps.tech@gmail.com";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);

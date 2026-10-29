@@ -84,6 +84,7 @@ function createForm(discount) {
     title: config.title || discount?.title || "",
     message: config.message || DEFAULT_VOLUME_CONFIG.message,
     status: config.status || "DRAFT",
+    redemption: { ...DEFAULT_VOLUME_CONFIG.redemption, ...(config.redemption || {}) },
     productMode: config.productMode || "all",
     selectedCollectionIds: [...(config.selectedCollectionIds || [])],
     selectedProductIds: [...(config.selectedProductIds || [])],

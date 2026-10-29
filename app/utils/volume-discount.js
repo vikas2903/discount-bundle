@@ -1,14 +1,10 @@
-import {
-  BUNDLE_METAFIELD_KEY,
-  BUNDLE_METAFIELD_NAMESPACE,
-} from "./bundle-discount";
-
 export const VOLUME_METAFIELD_NAMESPACE = "$app:volume-discount";
 export const VOLUME_METAFIELD_KEY = "function-configuration";
 export const DEFAULT_VOLUME_FUNCTION_HANDLE = "bundle-pack-3-for-999";
 export const DEFAULT_VOLUME_CONFIG = {
   title: "",
   message: "Buy more & save more",
+  redemption: { method: "automatic", code: "" },
   status: "DRAFT",
   productMode: "all",
   selectedCollectionIds: [],
@@ -77,6 +73,7 @@ export function parseVolumeConfig(value) {
         parsed?.status === "DRAFT" || parsed?.status === "ACTIVE"
           ? parsed.status
           : fallback.status,
+      redemption: normalizeRedemption(parsed?.redemption),
       selectedCollectionIds: normalizeCollectionIds(parsed?.selectedCollectionIds),
       productMode: normalizeProductMode(
         parsed?.productMode,
@@ -113,6 +110,7 @@ export function normalizeVolumeConfig(config) {
       config?.status === "DRAFT" || config?.status === "ACTIVE"
         ? config.status
         : DEFAULT_VOLUME_CONFIG.status,
+    redemption: normalizeRedemption(config?.redemption),
     selectedCollectionIds: normalizeCollectionIds(config?.selectedCollectionIds),
     productMode: normalizeProductMode(
       config?.productMode,
@@ -133,6 +131,10 @@ export function validateVolumeConfig(config, { allowLegacy = false } = {}) {
 
   if (!String(config?.title || "").trim()) {
     errors.push("Discount title is required.");
+  }
+
+  if (config?.redemption?.method === "code" && !config.redemption.code) {
+    errors.push("Enter a discount code for this coupon offer.");
   }
 
   if (!allowLegacy && (!Array.isArray(config?.tiers) || config.tiers.length === 0)) {
@@ -205,21 +207,14 @@ export function formatVolumeDiscountInput({
         type: "json",
         value: JSON.stringify(config),
       },
-      {
-        namespace: BUNDLE_METAFIELD_NAMESPACE,
-        key: BUNDLE_METAFIELD_KEY,
-        type: "json",
-        value: JSON.stringify({
-          selectedCollectionIds: normalizeCollectionIds(config.selectedCollectionIds),
-          productMode: normalizeProductMode(
-            config.productMode,
-            config.selectedCollectionIds,
-            config.selectedProductIds,
-          ),
-          selectedProductIds: normalizeProductIds(config.selectedProductIds),
-        }),
-      },
     ],
+  };
+}
+
+export function formatVolumeCodeDiscountInput(options) {
+  return {
+    ...formatVolumeDiscountInput(options),
+    code: String(options.config?.redemption?.code || "").trim(),
   };
 }
 
@@ -284,6 +279,13 @@ function normalizeCombinations(value) {
     productDiscounts: Boolean(value?.productDiscounts),
     orderDiscounts: Boolean(value?.orderDiscounts),
     shippingDiscounts: Boolean(value?.shippingDiscounts),
+  };
+}
+
+function normalizeRedemption(value) {
+  return {
+    method: value?.method === "code" ? "code" : "automatic",
+    code: String(value?.code || "").trim(),
   };
 }
 

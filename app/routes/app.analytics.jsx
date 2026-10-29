@@ -1,4 +1,4 @@
-import { isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
+import { isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import {
@@ -7,6 +7,7 @@ import {
 } from "../services/analytics.server";
 import { listBundleDiscounts } from "../services/bundle-discount.server";
 import { listVolumeDiscounts } from "../services/volume-discount.server";
+import { buildEmbeddedHref } from "../utils/embedded-navigation";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -54,7 +55,9 @@ export const loader = async ({ request }) => {
 
 export default function AnalyticsPage() {
   const loaderData = useLoaderData();
+  const { search } = useLocation();
   const shop = loaderData?.shop || "your store";
+  const helpHref = buildEmbeddedHref("/app/help", search, shop);
   const currencyCode = loaderData?.currencyCode || "USD";
   const orders = Array.isArray(loaderData?.orders) ? loaderData.orders : [];
   const offers = Array.isArray(loaderData?.offers) ? loaderData.offers : [];
@@ -129,7 +132,7 @@ export default function AnalyticsPage() {
         </section>
         <section
           style={{
-            display: "grid",
+            display: "none",
             gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: "1rem",
             padding: "1.25rem",
@@ -165,6 +168,13 @@ export default function AnalyticsPage() {
             <Feature title="Upsells & cross-sells" detail="Relevant recommendations designed to raise average order value." />
             <Feature title="Automatic free gifts" detail="Unlock gifts when customers reach configured cart-total goals." />
           </div>
+        </section>
+        <section style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", padding: "1.1rem 1.25rem", border: "1px solid #bfdbfe", borderRadius: "0.85rem", background: "#eff6ff" }}>
+          <div>
+            <strong style={{ color: "#1e3a8a" }}>Need help or support?</strong>
+            <p style={{ margin: "0.3rem 0 0", color: "#475569", fontSize: "0.9rem" }}>Find setup guidance, answers, and our support contact details.</p>
+          </div>
+          <a href={helpHref} style={{ display: "inline-flex", alignItems: "center", minHeight: "2.5rem", padding: "0 0.9rem", borderRadius: "0.55rem", background: "#1d4ed8", color: "#fff", fontWeight: 700, textDecoration: "none" }}>Open Help & support</a>
         </section>
         {/* <s-banner tone="info"><s-paragraph>Analytics uses order totals and discount data only. It does not read customer information.</s-paragraph></s-banner> */}
       </div>

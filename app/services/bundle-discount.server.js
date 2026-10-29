@@ -2,10 +2,13 @@ import {
   BUNDLE_METAFIELD_KEY,
   BUNDLE_METAFIELD_NAMESPACE,
   DEFAULT_FUNCTION_HANDLE,
+  formatBundleCodeDiscountInput,
   formatBundleDiscountInput,
   isBundleConfig,
+  isBundleConfigValue,
   parseBundleConfig,
 } from "../utils/bundle-discount";
+import { validateDiscountCode } from "./discount-code.server";
 
 export async function getBundleCollections(admin) {
   const collections = [];
@@ -63,7 +66,7 @@ export async function listBundleDiscounts(admin) {
       query ExistingBundleDiscounts {
         discountNodes(
           first: 100
-          query: "method:automatic type:app"
+          query: "type:app"
           sortKey: UPDATED_AT
           reverse: true
         ) {
@@ -83,6 +86,18 @@ export async function listBundleDiscounts(admin) {
                   status
                   startsAt
                   endsAt
+                }
+                ... on DiscountCodeApp {
+                  discountId
+                  title
+                  status
+                  startsAt
+                  endsAt
+                  codes(first: 1) {
+                    nodes {
+                      code
+                    }
+                  }
                 }
               }
             }
@@ -111,6 +126,16 @@ export async function createBundleDiscount(
   admin,
   { title, startsAt, endsAt, functionHandle, config },
 ) {
+  if (config.redemption?.method === "code") {
+    return createBundleCodeDiscount(admin, {
+      title,
+      startsAt,
+      endsAt,
+      functionHandle,
+      config,
+    });
+  }
+
   const response = await admin.graphql(
     `#graphql
       mutation CreateBundleDiscount($automaticAppDiscount: DiscountAutomaticAppInput!) {
@@ -157,6 +182,18 @@ export async function updateBundleDiscount(
   admin,
   { id, title, startsAt, endsAt, functionHandle, config, previousConfig },
 ) {
+  if (config.redemption?.method === "code") {
+    return updateBundleCodeDiscount(admin, {
+      id,
+      title,
+      startsAt,
+      endsAt,
+      functionHandle,
+      config,
+      previousConfig,
+    });
+  }
+
   const response = await admin.graphql(
     `#graphql
       mutation UpdateBundleDiscount(
@@ -207,7 +244,10 @@ export async function updateBundleDiscount(
   };
 }
 
-export async function toggleBundleDiscountStatus(admin, { id, nextStatus }) {
+export async function toggleBundleDiscountStatus(admin, { id, nextStatus, redemptionMethod = "automatic" }) {
+  if (redemptionMethod === "code") {
+    return toggleBundleCodeDiscountStatus(admin, { id, nextStatus });
+  }
   const mutationName =
     nextStatus === "disable"
       ? "discountAutomaticDeactivate"
@@ -251,7 +291,10 @@ export async function toggleBundleDiscountStatus(admin, { id, nextStatus }) {
   };
 }
 
-export async function deleteBundleDiscount(admin, id) {
+export async function deleteBundleDiscount(admin, id, redemptionMethod = "automatic") {
+  if (redemptionMethod === "code") {
+    return deleteBundleCodeDiscount(admin, id);
+  }
   const response = await admin.graphql(
     `#graphql
       mutation DeleteBundleDiscount($id: ID!) {
@@ -280,6 +323,150 @@ export async function deleteBundleDiscount(admin, id) {
   };
 }
 
+async function createBundleCodeDiscount(
+  admin,
+  { title, startsAt, endsAt, functionHandle, config },
+) {
+  const codeCheck = await validateDiscountCode(admin, config.redemption?.code);
+  if (!codeCheck.ok) {
+    return { ok: false, discount: null, ...codeCheck };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation CreateBundleCodeDiscount($codeAppDiscount: DiscountCodeAppInput!) {
+        discountCodeAppCreate(codeAppDiscount: $codeAppDiscount) {
+          userErrors { field message }
+          codeAppDiscount {
+            discountId
+            title
+            status
+            startsAt
+            endsAt
+            codes(first: 1) { nodes { code } }
+          }
+        }
+      }`,
+    {
+      variables: {
+        codeAppDiscount: formatBundleCodeDiscountInput({
+          title, startsAt, endsAt, functionHandle, config,
+        }),
+      },
+    },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeAppCreate;
+
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.codeAppDiscount),
+    discount: payload?.codeAppDiscount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+}
+
+async function updateBundleCodeDiscount(
+  admin,
+  { id, title, startsAt, endsAt, functionHandle, config, previousConfig },
+) {
+  const codeCheck = await validateDiscountCode(admin, config.redemption?.code, id);
+  if (!codeCheck.ok) {
+    return { ok: false, discount: null, ...codeCheck };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation UpdateBundleCodeDiscount($id: ID!, $codeAppDiscount: DiscountCodeAppInput!) {
+        discountCodeAppUpdate(id: $id, codeAppDiscount: $codeAppDiscount) {
+          userErrors { field message }
+          codeAppDiscount {
+            discountId
+            title
+            status
+            startsAt
+            endsAt
+            codes(first: 1) { nodes { code } }
+          }
+        }
+      }`,
+    {
+      variables: {
+        id,
+        codeAppDiscount: formatBundleCodeDiscountInput({
+          title, startsAt, endsAt, functionHandle, config, previousConfig,
+        }),
+      },
+    },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeAppUpdate;
+
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.codeAppDiscount),
+    discount: payload?.codeAppDiscount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+}
+
+async function toggleBundleCodeDiscountStatus(admin, { id, nextStatus }) {
+  const mutationName = nextStatus === "disable" ? "discountCodeDeactivate" : "discountCodeActivate";
+  const response = await admin.graphql(
+    `#graphql
+      mutation ToggleBundleCodeDiscount($id: ID!) {
+        ${mutationName}(id: $id) {
+          codeDiscountNode {
+            codeDiscount {
+              ... on DiscountCodeApp {
+                discountId
+                title
+                status
+                startsAt
+                endsAt
+              }
+            }
+          }
+          userErrors { field message }
+        }
+      }`,
+    { variables: { id } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.[mutationName];
+  const discount = payload?.codeDiscountNode?.codeDiscount;
+
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(discount),
+    discount: discount || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+    nextStatus,
+  };
+}
+
+async function deleteBundleCodeDiscount(admin, id) {
+  const response = await admin.graphql(
+    `#graphql
+      mutation DeleteBundleCodeDiscount($id: ID!) {
+        discountCodeDelete(id: $id) {
+          deletedCodeDiscountId
+          userErrors { field message }
+        }
+      }`,
+    { variables: { id } },
+  );
+  const responseJson = await response.json();
+  const payload = responseJson.data?.discountCodeDelete;
+
+  return {
+    ok: (payload?.userErrors || []).length === 0 && Boolean(payload?.deletedCodeDiscountId),
+    deletedCodeDiscountId: payload?.deletedCodeDiscountId || null,
+    userErrors: payload?.userErrors || [],
+    graphqlErrors: responseJson.errors || [],
+  };
+}
+
 export function resolveFunctionHandle() {
   const env = process.env ?? {};
 
@@ -290,23 +477,28 @@ function parseDiscountNodes(edges = []) {
   return edges
     .map(({ node }) => {
       const configValue = node.metafield?.value;
-      const automaticDiscount = node.discount;
+      const appDiscount = node.discount;
 
-      if (!configValue || !automaticDiscount?.discountId) {
+      if (!configValue || !appDiscount?.discountId || !isBundleConfigValue(configValue)) {
         return null;
       }
 
       return {
-        // Shopify mutations for automatic discounts require the
-        // DiscountAutomaticNode ID, not DiscountAutomaticApp.discountId.
+        // Shopify mutations require the enclosing discount node ID.
         nodeId: node.id,
         adminGraphqlNodeId: node.id,
-        discountId: automaticDiscount.discountId,
-        title: automaticDiscount.title,
-        status: automaticDiscount.status,
-        startsAt: automaticDiscount.startsAt,
-        endsAt: automaticDiscount.endsAt,
-        config: parseBundleConfig(configValue),
+        discountId: appDiscount.discountId,
+        title: appDiscount.title,
+        status: appDiscount.status,
+        startsAt: appDiscount.startsAt,
+        endsAt: appDiscount.endsAt,
+        config: {
+          ...parseBundleConfig(configValue),
+          redemption: {
+            method: appDiscount.codes ? "code" : "automatic",
+            code: appDiscount.codes?.nodes?.[0]?.code || "",
+          },
+        },
       };
     })
     .filter((entry) => entry && isBundleConfig(entry.config))
